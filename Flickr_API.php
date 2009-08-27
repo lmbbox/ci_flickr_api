@@ -4,11 +4,11 @@
  *
  * A Flickr API Library for CodeIgniter
  *
- * @package		CI_Flickr_API
+ * @package		LMB^Box CodeIgniter Flickr API
  * @author		Thomas Montague
  * @copyright	Copyright (c) 2009, LMB^Box
  * @license		
- * @link		http://lmbbox.com
+ * @link		http://lmbbox.com/projects/ci_flickr_api
  * @since		Version 0.1
  * @filesource
  */
@@ -16,15 +16,15 @@
 // ------------------------------------------------------------------------
 
 /**
- * CI_Flickr_API Class
+ * Flickr API Class
  *
- * @package		CI_Flickr_API
+ * @package		LMB^Box CodeIgniter Flickr API
  * @subpackage	Libraries
- * @category	Flickr_API
+ * @category	Flickr API
  * @author		Thomas Montague
- * @link		http://downr.lmbbox.com
+ * @link		http://codeigniter.lmbbox.com/user_guide/libraries/flickr_api.html
  */
-class CI_Flickr_API {
+class Flickr_API {
 
 	var $api_key			= '';
 	var $secret				= '';

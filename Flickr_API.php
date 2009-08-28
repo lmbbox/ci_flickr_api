@@ -54,7 +54,7 @@ class Flickr_API {
 	 * @access	public
 	 * @param	array	initialization parameters
 	 */
-	function CI_Flickr_API($params = array())
+	function Flickr_API($params = array())
 	{
 		// Set the super object to a local variable for use throughout the class
 		$this->CI =& get_instance();
@@ -223,6 +223,18 @@ class Flickr_API {
 			log_message('error', 'All parameters were not passed or correct.');
 		}
 		return FALSE;
+	}
+	
+	function _check_timeout_ac()
+	{
+		if (time() - strtotime($this->_f->req->_response->_headers['date']) < $this->timeout_ac)
+			sleep($this->timeout_ac - (time() - strtotime($this->_f->req->_response->_headers['date'])));
+	}
+	
+	function _check_timeout_dl()
+	{
+		if (time() - strtotime($this->_f->req->_response->_headers['date']) < $this->timeout_dl)
+			sleep($this->timeout_dl - (time() - strtotime($this->_f->req->_response->_headers['date'])));
 	}
 	
 	function _reset_error()

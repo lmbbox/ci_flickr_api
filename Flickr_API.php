@@ -95,7 +95,16 @@ class Flickr_API {
 	
 	function set_token($token)
 	{
-		$this->token = (string) $token;
+		if (!empty($token))
+		{
+			$this->token = (string) $token;
+			return TRUE;
+		}
+		else
+		{
+			log_message('error', 'All parameters were not passed or correct.');
+		}
+		return FALSE;
 	}
 	
 	function start_cache($run_cleanup = FALSE)

@@ -1410,4 +1410,4 @@ class Flickr_API {
 }
 
 /* End of file Flickr_API.php */
-/* Location: ./app/libraries/CI_Flickr_API/Flickr_API.php */
+/* Location: ./system/application/libraries/ci_flickr_api/Flickr_API.php */

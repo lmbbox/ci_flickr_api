@@ -345,7 +345,7 @@ class Flickr_API {
 			curl_setopt($session, CURLOPT_POST, TRUE);
 			curl_setopt($session, CURLOPT_POSTFIELDS, $params);
 			$this->response = curl_exec($session);
-			if (TRUE === $this->debug) log_message('debug', curl_getinfo($session));
+			if (TRUE === $this->debug) log_message('debug', print_r(curl_getinfo($session), TRUE));
 			
 			if (FALSE !== $this->response)
 			{

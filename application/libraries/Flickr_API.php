@@ -293,6 +293,7 @@ class Flickr_API {
 				
 				$this->_reset_error();
 				$this->response = $this->_get_cached($method, $params);
+				
 				if (FALSE === $this->response || TRUE === $nocache)
 				{
 					$auth_sig = '';
@@ -336,9 +337,37 @@ class Flickr_API {
 		return FALSE;
 	}
 	
+	protected function _send_rest($method, $params)
+	{
+		if (!empty($method) && is_array($params) && !empty($params))
+		{
+			$session = curl_init(self::API_REST_URL);
+			curl_setopt($session, CURLOPT_POST, TRUE);
+			curl_setopt($session, CURLOPT_POSTFIELDS, array_merge($params, array('method' => $method)));
+			$this->response = curl_exec($session);
+			
+			if (FALSE !== $this->response)
+			{
+				$this->_cache($method, $params, $this->response);
+				curl_close($session);
+				return TRUE;
+			}
+			else
+			{
+				$this->_error(curl_errno($session), curl_error($session), 'There has been a problem sending your command to the server. Error #%s: "%s"');
+				curl_close($session);
+			}
+		}
+		else
+		{
+			$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
+		}
+		return FALSE;
+	}
+	
 	protected function _send_xmlrpc($method, $params)
 	{
-		if (!empty($method) && !empty($params))
+		if (!empty($method) && is_array($params) && !empty($params))
 		{
 			$this->CI->load->library('xmlrpc');
 			if (TRUE === $this->debug) $this->CI->xmlrpc->set_debug(TRUE);

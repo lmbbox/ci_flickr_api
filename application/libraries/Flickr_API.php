@@ -162,14 +162,14 @@ class Flickr_API {
 		return FALSE;
 	}
 	
-	protected function _get_cached($method, $params)
+	protected function _get_cached($request)
 	{
-		if (!empty($method) && is_array($params) && !empty($params))
+		if (is_array($request) && !empty($request))
 		{
 			if (TRUE === $this->cache_use_db AND $this->cache_table_name != '')
 			{
 				$this->CI->db->select('response');
-				$this->CI->db->where('request', md5(serialize(array('method' => $method, 'params' => $params))));
+				$this->CI->db->where('request', md5(serialize($request)));
 				$this->CI->db->where('expire_date >=', time() - $this->cache_expiration);
 				$query = $this->CI->db->get($this->cache_table_name);
 				
@@ -187,13 +187,13 @@ class Flickr_API {
 		return FALSE;
 	}
 	
-	protected function _cache($method, $params, $response)
+	protected function _cache($request, $response)
 	{
-		if (!empty($method) && is_array($params) && !empty($params) && !empty($response))
+		if (is_array($request) && !empty($request) && !empty($response))
 		{
 			if (TRUE === $this->cache_use_db AND $this->cache_table_name != '')
 			{
-				$request_hash = md5(serialize(array('method' => $method, 'params' => $params)));
+				$request_hash = md5(serialize($request));
 				
 				$this->CI->db->where('request', $request_hash);
 				$query = $this->CI->db->get($this->cache_table_name);
@@ -287,20 +287,20 @@ class Flickr_API {
 			{
 				foreach ($params as $param => $value) if (is_null($value)) unset($params[$param]);
 				
-				$params = array_merge($params, array('api_key' => $this->api_key, 'format' => $this->response_format));
+				$params = array_merge($params, array('method' => $method, 'api_key' => $this->api_key, 'format' => $this->response_format));
 				if (!empty($this->token)) $params = array_merge($params, array('auth_token' => $this->token));
 				ksort($params);
 				
 				$this->_reset_error();
-				$this->response = $this->_get_cached($method, $params);
+				$this->response = $this->_get_cached($params);
 				
 				if (FALSE === $this->response || TRUE === $nocache)
 				{
-					$auth_sig = '';
-					foreach ($params as $param => $value) $auth_sig .= $param . $value;
-					
+					if ('xmlrpc' == $this->request_format) unset($params['method']);
 					if (!empty($this->secret))
 					{
+						$auth_sig = '';
+						foreach ($params as $param => $value) $auth_sig .= $param . $value;
 						$api_sig = md5($this->secret . $auth_sig);
 						$params = array_merge($params, array('api_sig' => $api_sig));
 					}
@@ -308,13 +308,13 @@ class Flickr_API {
 					switch ($this->request_format)
 					{
 						case 'rest':
-							if (FALSE === $this->_send_rest($method, $params)) return FALSE;
+							if (FALSE === $this->_send_rest($params)) return FALSE;
 							break;
 						case 'xmlrpc':
 							if (FALSE === $this->_send_xmlrpc($method, $params)) return FALSE;
 							break;
 						case 'soap':
-							if (FALSE === $this->_send_soap($method, $params)) return FALSE;
+							if (FALSE === $this->_send_soap($params)) return FALSE;
 							break;
 						default:
 							$this->_error(TRUE, __METHOD__ . ' - Invalid Request Format "' . $this->request_format . '".', '%2$s');
@@ -337,18 +337,19 @@ class Flickr_API {
 		return FALSE;
 	}
 	
-	protected function _send_rest($method, $params)
+	protected function _send_rest($params)
 	{
-		if (!empty($method) && is_array($params) && !empty($params))
+		if (is_array($params) && !empty($params))
 		{
 			$session = curl_init(self::API_REST_URL);
 			curl_setopt($session, CURLOPT_POST, TRUE);
-			curl_setopt($session, CURLOPT_POSTFIELDS, array_merge($params, array('method' => $method)));
+			curl_setopt($session, CURLOPT_POSTFIELDS, $params);
 			$this->response = curl_exec($session);
+			if (TRUE === $this->debug) log_message('debug', curl_getinfo($session));
 			
 			if (FALSE !== $this->response)
 			{
-				$this->_cache($method, $params, $this->response);
+				$this->_cache($params, $this->response);
 				curl_close($session);
 				return TRUE;
 			}

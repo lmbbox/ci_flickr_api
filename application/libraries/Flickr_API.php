@@ -62,7 +62,10 @@ class Flickr_API {
 		// Set the super object to a local variable for use throughout the class
 		$this->CI =& get_instance();
 		
+		// Initialize Parameters
 		if (count($params) > 0) $this->initialize($params);
+		
+		// Start cache if enabled
 		if (TRUE === $this->cache_use_db) $this->start_cache(TRUE);
 		
 		log_message('debug', 'Flickr_API Class Initialized');
@@ -81,6 +84,13 @@ class Flickr_API {
 	{
 		if (count($params) > 0)
 		{
+			// Protect restricted variables
+			unset($params['CI']);
+			unset($params['error_code']);
+			unset($params['error_message']);
+			unset($params['response']);
+			unset($params['parsed_response']);
+			
 			foreach ($params as $key => $val)
 			{
 				if (isset($this->$key))
@@ -91,10 +101,14 @@ class Flickr_API {
 		}
 	}
 	
+	// --------------------------------------------------------------------
+	
 	public function set_debug($debug)
 	{
 		$this->debug = (bool) $debug;
 	}
+	
+	// --------------------------------------------------------------------
 	
 	public function set_token($token)
 	{
@@ -110,6 +124,8 @@ class Flickr_API {
 		return FALSE;
 	}
 	
+	// --------------------------------------------------------------------
+	
 	public function start_cache($run_cleanup = FALSE)
 	{
 		$this->cache_use_db = TRUE;
@@ -117,10 +133,14 @@ class Flickr_API {
 		if (TRUE === $run_cleanup) $this->cleanup_cache();
 	}
 	
+	// --------------------------------------------------------------------
+	
 	public function stop_cache()
 	{
 		$this->cache_use_db = FALSE;
 	}
+	
+	// --------------------------------------------------------------------
 	
 	public function cleanup_cache()
 	{
@@ -138,6 +158,8 @@ class Flickr_API {
 		}
 		return FALSE;
 	}
+	
+	// --------------------------------------------------------------------
 	
 	protected function _create_table_cache()
 	{
@@ -161,6 +183,8 @@ class Flickr_API {
 		}
 		return FALSE;
 	}
+	
+	// --------------------------------------------------------------------
 	
 	protected function _get_cached($request)
 	{
@@ -186,6 +210,8 @@ class Flickr_API {
 		}
 		return FALSE;
 	}
+	
+	// --------------------------------------------------------------------
 	
 	protected function _cache($request, $response)
 	{
@@ -237,11 +263,15 @@ class Flickr_API {
 		return FALSE;
 	}
 	
+	// --------------------------------------------------------------------
+	
 	protected function _check_timeout_ac()
 	{
 		if (time() - strtotime($this->_f->req->_response->_headers['date']) < $this->timeout_ac)
 			sleep($this->timeout_ac - (time() - strtotime($this->_f->req->_response->_headers['date'])));
 	}
+	
+	// --------------------------------------------------------------------
 	
 	protected function _check_timeout_dl()
 	{
@@ -249,11 +279,15 @@ class Flickr_API {
 			sleep($this->timeout_dl - (time() - strtotime($this->_f->req->_response->_headers['date'])));
 	}
 	
+	// --------------------------------------------------------------------
+	
 	protected function _reset_error()
 	{
 		$this->error_code = FALSE;
 		$this->error_message = FALSE;
 	}
+	
+	// --------------------------------------------------------------------
 	
 	protected function _error($error_code, $error_message, $exit_message)
 	{
@@ -269,15 +303,21 @@ class Flickr_API {
 		}
 	}
 	
+	// --------------------------------------------------------------------
+	
 	public function get_error_code()
 	{
 		return $this->error_code;
 	}
 	
+	// --------------------------------------------------------------------
+	
 	public function get_error_message()
 	{
 		return $this->error_message;
 	}
+	
+	// --------------------------------------------------------------------
 	
 	public function request($method, $params = array(), $nocache = FALSE)
 	{
@@ -337,6 +377,8 @@ class Flickr_API {
 		return FALSE;
 	}
 	
+	// --------------------------------------------------------------------
+	
 	protected function _send_rest($params)
 	{
 		if (is_array($params) && !empty($params))
@@ -368,6 +410,8 @@ class Flickr_API {
 		return FALSE;
 	}
 	
+	// --------------------------------------------------------------------
+	
 	protected function _send_xmlrpc($method, $params)
 	{
 		if (!empty($method) && is_array($params) && !empty($params))
@@ -394,6 +438,8 @@ class Flickr_API {
 		}
 		return FALSE;
 	}
+	
+	// --------------------------------------------------------------------
 	
 	public function parse_response($response)
 	{
@@ -452,6 +498,8 @@ class Flickr_API {
 		return FALSE;
 	}
 	
+	// --------------------------------------------------------------------
+	
 	protected function _parse_php_serial($response)
 	{
 		if (!is_array($response))
@@ -475,6 +523,8 @@ class Flickr_API {
 			return($response);
 		}
 	}
+	
+	// --------------------------------------------------------------------
 	
 	public function authenticate($permission = 'read', $redirect = NULL)
 	{
@@ -505,6 +555,8 @@ class Flickr_API {
 		}
 		return FALSE;
 	}
+	
+	// --------------------------------------------------------------------
 	
 	public function get_photo_url($photo, $size = 'original')
 	{
@@ -546,6 +598,8 @@ class Flickr_API {
 		}
 		return FALSE;
 	}
+	
+	// --------------------------------------------------------------------
 	
 	public function get_buddy_icon_url($nsid, $icon_farm, $icon_server, $return_default = TRUE)
 	{

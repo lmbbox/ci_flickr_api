@@ -25,22 +25,25 @@
  * @link		http://codeigniter.lmbbox.com/user_guide/libraries/flickr_api.html
  */
 class Flickr_API {
-
-	protected $api_key			= '';
+	
+	protected $request_format		= '';
+	protected $response_format		= '';
+	protected $api_key				= '';
 	protected $secret				= '';
 	protected $token				= '';
-	protected $cache_use_db		= FALSE;
-	protected $cache_table_name	= 'flickr_api_cache';
-	protected $cache_expiration	= 600;
+	protected $cache_use_db			= FALSE;
+	protected $cache_table_name		= 'flickr_api_cache';
+	protected $cache_expiration		= 600;
 	protected $cache_max_rows		= 1000;
 	protected $parse_response		= TRUE;
 	protected $exit_on_error		= FALSE;
 	protected $debug				= FALSE;
-//	protected $api_rest_url		= 'http://api.flickr.com/services/rest/';
-	protected $api_auth_url		= 'http://www.flickr.com/services/auth/'; // http://www.23hq.com/services/auth/
-	protected $api_xmlrpc_url		= 'http://api.flickr.com/services/xmlrpc/';
-	protected $api_upload_url		= 'http://api.flickr.com/services/upload/';
-	protected $api_replace_url	= 'http://api.flickr.com/services/replace/';
+	
+	const API_AUTH_URL				= 'http://www.flickr.com/services/auth/'; // http://www.23hq.com/services/auth/
+	const API_REST_URL				= 'http://api.flickr.com/services/rest/';
+	const API_XMLRPC_URL			= 'http://api.flickr.com/services/xmlrpc/';
+	const API_UPLOAD_URL			= 'http://api.flickr.com/services/upload/';
+	const API_REPLACE_URL			= 'http://api.flickr.com/services/replace/';
 	
 	protected $error_code			= FALSE;
 	protected $error_message		= FALSE;
@@ -102,7 +105,7 @@ class Flickr_API {
 		}
 		else
 		{
-			log_message('error', 'All parameters were not passed or correct.');
+			log_message('error', __METHOD__ . ' - All parameters were not passed or correct.');
 		}
 		return FALSE;
 	}
@@ -179,7 +182,7 @@ class Flickr_API {
 		}
 		else
 		{
-			log_message('error', 'All parameters were not passed or correct.');
+			log_message('error', __METHOD__ . ' - All parameters were not passed or correct.');
 		}
 		return FALSE;
 	}
@@ -208,7 +211,7 @@ class Flickr_API {
 					}
 					else
 					{
-						log_message('error', 'Error updating ' . $this->cache_table_name . ' record!');
+						log_message('error', __METHOD__ . ' - Error updating ' . $this->cache_table_name . ' record!');
 					}
 				}
 				else
@@ -222,14 +225,14 @@ class Flickr_API {
 					}
 					else
 					{
-						log_message('error', 'Error creating ' . $this->cache_table_name . ' record!');
+						log_message('error', __METHOD__ . ' - Error creating ' . $this->cache_table_name . ' record!');
 					}
 				}
 			}
 		}
 		else
 		{
-			log_message('error', 'All parameters were not passed or correct.');
+			log_message('error', __METHOD__ . ' - All parameters were not passed or correct.');
 		}
 		return FALSE;
 	}
@@ -278,13 +281,13 @@ class Flickr_API {
 	
 	public function request($method, $params = array(), $nocache = FALSE)
 	{
-		if (!empty($this->api_key) && !empty($this->api_xmlrpc_url))
+		if (!empty($this->request_format) && !empty($this->response_format) && !empty($this->api_key) && !empty($this->secret))
 		{
 			if (!empty($method) && is_array($params))
 			{
 				foreach ($params as $param => $value) if (is_null($value)) unset($params[$param]);
 				
-				$params = array_merge(array('api_key' => $this->api_key), $params);
+				$params = array_merge($params, array('api_key' => $this->api_key, 'format' => $this->response_format));
 				if (!empty($this->token)) $params = array_merge($params, array('auth_token' => $this->token));
 				ksort($params);
 				
@@ -301,19 +304,21 @@ class Flickr_API {
 						$params = array_merge($params, array('api_sig' => $api_sig));
 					}
 					
-					$this->CI->load->library('xmlrpc');
-					$this->CI->xmlrpc->server($this->api_xmlrpc_url);
-					$this->CI->xmlrpc->method($method);
-					$this->CI->xmlrpc->request(array(array($params, 'struct')));
-					if ($this->CI->xmlrpc->send_request())
+					switch ($this->request_format)
 					{
-						$this->response = $this->CI->xmlrpc->display_response();
-						$this->_cache($method, $params, $this->response);
-					}
-					else
-					{
-						$this->_error($this->CI->xmlrpc->result->errno, $this->CI->xmlrpc->display_error(), 'There has been a problem sending your command to the server. Error #%s: "%s"');
-						return FALSE;
+						case 'rest':
+							if (FALSE === $this->_send_rest($method, $params)) return FALSE;
+							break;
+						case 'xmlrpc':
+							if (FALSE === $this->_send_xmlrpc($method, $params)) return FALSE;
+							break;
+						case 'soap':
+							if (FALSE === $this->_send_soap($method, $params)) return FALSE;
+							break;
+						default:
+							$this->_error(TRUE, __METHOD__ . ' - Invalid Request Format "' . $this->request_format . '".', '%2$s');
+							return FALSE;
+							break;
 					}
 				}
 				
@@ -321,39 +326,127 @@ class Flickr_API {
 			}
 			else
 			{
-				$this->_error(TRUE, 'All parameters were not passed or correct.', '%2$s');
+				$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
 			}
 		}
 		else
 		{
-			$this->_error(TRUE, 'Required config(s) missing.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - Required config(s) missing.', '%2$s');
+		}
+		return FALSE;
+	}
+	
+	protected function _send_xmlrpc($method, $params)
+	{
+		if (!empty($method) && !empty($params))
+		{
+			$this->CI->load->library('xmlrpc');
+			if (TRUE === $this->debug) $this->CI->xmlrpc->set_debug(TRUE);
+			$this->CI->xmlrpc->server(self::API_XMLRPC_URL);
+			$this->CI->xmlrpc->method($method);
+			$this->CI->xmlrpc->request(array(array($params, 'struct')));
+			if ($this->CI->xmlrpc->send_request())
+			{
+				$this->response = $this->CI->xmlrpc->display_response();
+				$this->_cache($method, $params, $this->response);
+				return TRUE;
+			}
+			else
+			{
+				$this->_error($this->CI->xmlrpc->result->errno, $this->CI->xmlrpc->display_error(), 'There has been a problem sending your command to the server. Error #%s: "%s"');
+			}
+		}
+		else
+		{
+			$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
 		}
 		return FALSE;
 	}
 	
 	public function parse_response($response)
 	{
-		if (!empty($response))
+		if (!empty($this->response_format))
 		{
-			if (class_exists('SimpleXMLElement'))
+			if (!empty($response))
 			{
-				return new SimpleXMLElement($response);
+				switch ($this->response_format)
+				{
+					case 'rest':
+						
+						break;
+					case 'xmlrpc':
+						if (class_exists('SimpleXMLElement'))
+						{
+							return new SimpleXMLElement($response);
+						}
+						else
+						{
+							$this->_error(TRUE, __METHOD__ . ' - SimpleXMLElement class does not exist.', '%2$s');
+						}
+						break;
+					case 'soap':
+						
+						break;
+					case 'json':
+						
+						break;
+					case 'php_serial':
+						$response = $this->_parse_php_serial(unserialize($response));
+						
+						if ($response['stat'] == 'ok')
+						{
+							return $response;
+						}
+						else
+						{
+							$this->_error($response['code'], $response['message'], 'The Flickr API returned the following error: #%s: "%s"');
+						}
+						break;
+					default:
+						$this->_error(TRUE, __METHOD__ . ' - Invalid Request Format "' . $this->request_format . '".', '%2$s');
+						return FALSE;
+						break;
+				}
 			}
 			else
 			{
-				$this->_error(TRUE, 'SimpleXMLElement class does not exist.', '%2$s');
+				$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
 			}
 		}
 		else
 		{
-			$this->_error(TRUE, 'All parameters were not passed or correct.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - Required config(s) missing.', '%2$s');
 		}
 		return FALSE;
 	}
 	
+	protected function _parse_php_serial($response)
+	{
+		if (!is_array($response))
+		{
+			return $response;
+		}
+		elseif (count($response) == 0)
+		{
+			return $response;
+		}
+		elseif (count($response) == 1 && array_key_exists('_content', $response))
+		{
+			return $response['_content'];
+		}
+		else
+		{
+			foreach ($response as $key => $value)
+			{
+				$response[$key] = $this->_parse_php_serial($value);
+			}
+			return($response);
+		}
+	}
+	
 	public function authenticate($permission = 'read', $redirect = NULL)
 	{
-		if (!empty($this->api_key) && !empty($this->secret) && !empty($this->api_auth_url))
+		if (!empty($this->api_key) && !empty($this->secret))
 		{
 			$this->_reset_error();
 			if (empty($this->token))
@@ -361,7 +454,7 @@ class Flickr_API {
 				$this->CI->load->helper('url');
 				$redirect = is_null($redirect) ? uri_string() : $redirect;
 				$api_sig = md5($this->secret . 'api_key' . $this->api_key . 'extra' . $redirect . 'perms' . $permission);
-				header('Location: ' . $this->api_auth_url . '?api_key=' . $this->api_key . '&extra=' . $redirect . '&perms=' . $permission . '&api_sig='. $api_sig);
+				header('Location: ' . self::API_AUTH_URL . '?api_key=' . $this->api_key . '&extra=' . $redirect . '&perms=' . $permission . '&api_sig='. $api_sig);
 				exit();
 			}
 			else
@@ -376,7 +469,7 @@ class Flickr_API {
 		}
 		else
 		{
-			$this->_error(TRUE, 'Required config(s) missing.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - Required config(s) missing.', '%2$s');
 		}
 		return FALSE;
 	}
@@ -417,7 +510,7 @@ class Flickr_API {
 		}
 		else
 		{
-			$this->_error(TRUE, 'All parameters were not passed or correct.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
 		}
 		return FALSE;
 	}
@@ -437,7 +530,7 @@ class Flickr_API {
 		}
 		else
 		{
-			$this->_error(TRUE, 'All parameters were not passed or correct.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
 		}
 		return FALSE;
 	}

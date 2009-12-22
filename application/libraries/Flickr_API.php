@@ -9,7 +9,7 @@
  * @copyright	Copyright (c) 2009, LMB^Box
  * @license		
  * @link		http://lmbbox.com/projects/ci_flickr_api
- * @since		Version 0.1
+ * @since		Version 0.2
  * @filesource
  */
 
@@ -26,27 +26,40 @@
  */
 class Flickr_API {
 	
-	protected $request_format		= '';
-	protected $response_format		= '';
-	protected $api_key				= '';
-	protected $secret				= '';
-	protected $token				= '';
-	protected $cache_use_db			= FALSE;
-	protected $cache_table_name		= 'flickr_api_cache';
-	protected $cache_expiration		= 600;
-	protected $cache_max_rows		= 1000;
-	protected $parse_response		= TRUE;
-	protected $exit_on_error		= FALSE;
-	protected $debug				= FALSE;
+	const API_AUTH_URL					= 'http://www.flickr.com/services/auth/'; // http://www.23hq.com/services/auth/
+	const API_REST_URL					= 'http://api.flickr.com/services/rest/';
+	const API_XMLRPC_URL				= 'http://api.flickr.com/services/xmlrpc/';
+	const API_UPLOAD_URL				= 'http://api.flickr.com/services/upload/';
+	const API_REPLACE_URL				= 'http://api.flickr.com/services/replace/';
+	const REQUEST_FORMAT_REST			= 'rest';
+	const REQUEST_FORMAT_XMLRPC			= 'xmlrpc';
+	const REQUEST_FORMAT_SOAP			= 'soap';
+	const RESPONSE_FORMAT_REST			= 'rest';
+	const RESPONSE_FORMAT_XMLRPC		= 'xmlrpc';
+	const RESPONSE_FORMAT_SOAP			= 'soap';
+	const RESPONSE_FORMAT_JSON			= 'json';
+	const RESPONSE_FORMAT_PHP_SERIAL	= 'php_serial';
+	const PHOTO_SIZE_ORIGINAL			= 'original';
+	const PHOTO_SIZE_LARGE				= 'large';
+	const PHOTO_SIZE_MEDIUM				= 'medium';
+	const PHOTO_SIZE_SMALL				= 'small';
+	const PHOTO_SIZE_THUMBNAIL			= 'thumbnail';
+	const PHOTO_SIZE_SQUARE				= 'square';
 	
-	const API_AUTH_URL				= 'http://www.flickr.com/services/auth/'; // http://www.23hq.com/services/auth/
-	const API_REST_URL				= 'http://api.flickr.com/services/rest/';
-	const API_XMLRPC_URL			= 'http://api.flickr.com/services/xmlrpc/';
-	const API_UPLOAD_URL			= 'http://api.flickr.com/services/upload/';
-	const API_REPLACE_URL			= 'http://api.flickr.com/services/replace/';
-	
-	protected $error_code			= FALSE;
-	protected $error_message		= FALSE;
+	protected $request_format			= '';
+	protected $response_format			= '';
+	protected $api_key					= '';
+	protected $secret					= '';
+	protected $token					= '';
+	protected $cache_use_db				= FALSE;
+	protected $cache_table_name			= 'flickr_api_cache';
+	protected $cache_expiration			= 600;
+	protected $cache_max_rows			= 1000;
+	protected $parse_response			= TRUE;
+	protected $exit_on_error			= FALSE;
+	protected $debug					= FALSE;
+	protected $error_code				= FALSE;
+	protected $error_message			= FALSE;
 	protected $response;
 	protected $parsed_response;
 	protected $CI;
@@ -265,22 +278,6 @@ class Flickr_API {
 	
 	// --------------------------------------------------------------------
 	
-	protected function _check_timeout_ac()
-	{
-		if (time() - strtotime($this->_f->req->_response->_headers['date']) < $this->timeout_ac)
-			sleep($this->timeout_ac - (time() - strtotime($this->_f->req->_response->_headers['date'])));
-	}
-	
-	// --------------------------------------------------------------------
-	
-	protected function _check_timeout_dl()
-	{
-		if (time() - strtotime($this->_f->req->_response->_headers['date']) < $this->timeout_dl)
-			sleep($this->timeout_dl - (time() - strtotime($this->_f->req->_response->_headers['date'])));
-	}
-	
-	// --------------------------------------------------------------------
-	
 	protected function _reset_error()
 	{
 		$this->error_code = FALSE;
@@ -336,7 +333,7 @@ class Flickr_API {
 				
 				if (FALSE === $this->response || TRUE === $nocache)
 				{
-					if ('xmlrpc' == $this->request_format) unset($params['method']);
+					if (self::REQUEST_FORMAT_XMLRPC == $this->request_format) unset($params['method']);
 					if (!empty($this->secret))
 					{
 						$auth_sig = '';
@@ -347,13 +344,13 @@ class Flickr_API {
 					
 					switch ($this->request_format)
 					{
-						case 'rest':
+						case self::REQUEST_FORMAT_REST:
 							if (FALSE === $this->_send_rest($params)) return FALSE;
 							break;
-						case 'xmlrpc':
+						case self::REQUEST_FORMAT_XMLRPC:
 							if (FALSE === $this->_send_xmlrpc($method, $params)) return FALSE;
 							break;
-						case 'soap':
+						case self::REQUEST_FORMAT_SOAP:
 							if (FALSE === $this->_send_soap($params)) return FALSE;
 							break;
 						default:
@@ -449,10 +446,10 @@ class Flickr_API {
 			{
 				switch ($this->response_format)
 				{
-					case 'rest':
+					case self::RESPONSE_FORMAT_REST:
 						
 						break;
-					case 'xmlrpc':
+					case self::RESPONSE_FORMAT_XMLRPC:
 						if (class_exists('SimpleXMLElement'))
 						{
 							return new SimpleXMLElement($response);
@@ -462,13 +459,13 @@ class Flickr_API {
 							$this->_error(TRUE, __METHOD__ . ' - SimpleXMLElement class does not exist.', '%2$s');
 						}
 						break;
-					case 'soap':
+					case self::RESPONSE_FORMAT_SOAP:
 						
 						break;
-					case 'json':
+					case self::RESPONSE_FORMAT_JSON:
 						
 						break;
-					case 'php_serial':
+					case self::RESPONSE_FORMAT_PHP_SERIAL:
 						$response = $this->_parse_php_serial(unserialize($response));
 						
 						if ($response['stat'] == 'ok')
@@ -481,7 +478,7 @@ class Flickr_API {
 						}
 						break;
 					default:
-						$this->_error(TRUE, __METHOD__ . ' - Invalid Request Format "' . $this->request_format . '".', '%2$s');
+						$this->_error(TRUE, __METHOD__ . ' - Invalid Response Format "' . $this->response_format . '".', '%2$s');
 						return FALSE;
 						break;
 				}
@@ -558,37 +555,39 @@ class Flickr_API {
 	
 	// --------------------------------------------------------------------
 	
-	public function get_photo_url($photo, $size = 'original')
+	public function get_photo_url($id, $farm, $server, $secret, $size = self::PHOTO_SIZE_MEDIUM, $original_secret = '', $original_format = '')
 	{
-		if (is_array($photo) && !empty($photo['id']) && !empty($photo['farm']) && !empty($photo['server']) && !empty($photo['secret']))
+		if (!empty($id) && !empty($farm) && !empty($server) && !empty($secret))
 		{
 			switch ($size)
 			{
-				case 'square':
-					return 'http://farm' . $photo['farm'] . '.static.flickr.com/' . $photo['server'] . '/'. $photo['id'] . '_' . $photo['secret'] . '_s.jpg';
-					break;
-				case 'thumbnail':
-					return 'http://farm' . $photo['farm'] . '.static.flickr.com/' . $photo['server'] . '/'. $photo['id'] . '_' . $photo['secret'] . '_t.jpg';
-					break;
-				case 'small':
-					return 'http://farm' . $photo['farm'] . '.static.flickr.com/' . $photo['server'] . '/'. $photo['id'] . '_' . $photo['secret'] . '_m.jpg';
-					break;
-				case 'medium':
-					return 'http://farm' . $photo['farm'] . '.static.flickr.com/' . $photo['server'] . '/'. $photo['id'] . '_' . $photo['secret'] . '.jpg';
-					break;
-				case 'large':
-					return 'http://farm' . $photo['farm'] . '.static.flickr.com/' . $photo['server'] . '/'. $photo['id'] . '_' . $photo['secret'] . '_b.jpg';
-					break;
-				case 'original':
-				default:
-					if (array_key_exists('originalsecret', $photo) && array_key_exists('originalformat', $photo))
+				case self::PHOTO_SIZE_ORIGINAL:
+					if (!empty($original_secret) && !empty($original_format))
 					{
-						return 'http://farm' . $photo['farm'] . '.static.flickr.com/' . $photo['server'] . '/'. $photo['id'] . '_' . $photo['originalsecret'] . '_o.' . $photo['originalformat'];
+						return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $original_secret . '_o.' . $original_format;
 					}
 					else
 					{
-						return 'http://farm' . $photo['farm'] . '.static.flickr.com/' . $photo['server'] . '/'. $photo['id'] . '_' . $photo['secret'] . '_b.jpg';
+						$this->_error(TRUE, __METHOD__ . ' - Missing original secret and format values for photo.', '%2$s');
 					}
+					break;
+				case self::PHOTO_SIZE_LARGE:
+					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_b.jpg';
+					break;
+				case self::PHOTO_SIZE_MEDIUM:
+					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '.jpg';
+					break;
+				case self::PHOTO_SIZE_SMALL:
+					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_m.jpg';
+					break;
+				case self::PHOTO_SIZE_THUMBNAIL:
+					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_t.jpg';
+					break;
+				case self::PHOTO_SIZE_SQUARE:
+					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_s.jpg';
+					break;
+				default:
+					$this->_error(TRUE, __METHOD__ . ' - The size "' . $size . '" was not recognized.', '%2$s');
 					break;
 			}
 		}

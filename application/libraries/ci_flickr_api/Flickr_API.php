@@ -75,6 +75,7 @@ class Flickr_API {
 	{
 		// Set the super object to a local variable for use throughout the class
 		$this->CI =& get_instance();
+		$this->CI->lang->load($this->CI->config->item('language'), 'ci_flickr_api');
 		
 		// Initialize Parameters
 		if (count($params) > 0) $this->initialize($params);
@@ -147,7 +148,7 @@ class Flickr_API {
 		}
 		else
 		{
-			log_message('error', __METHOD__ . ' - All parameters were not passed or correct.');
+			log_message('error', __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_params_error'), '%2$s');
 		}
 		return FALSE;
 	}
@@ -266,7 +267,7 @@ class Flickr_API {
 		}
 		else
 		{
-			log_message('error', __METHOD__ . ' - All parameters were not passed or correct.');
+			log_message('error', __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_params_error'), '%2$s');
 		}
 		return FALSE;
 	}
@@ -305,7 +306,7 @@ class Flickr_API {
 					}
 					else
 					{
-						log_message('error', __METHOD__ . ' - Error updating ' . $this->cache_table_name . ' record!');
+						log_message('error', __METHOD__ . ' - ' . sprintf($this->CI->lang->line('ci_flickr_api_error_updating_cache'), $this->cache_table_name), '%2$s');
 					}
 				}
 				else
@@ -319,14 +320,14 @@ class Flickr_API {
 					}
 					else
 					{
-						log_message('error', __METHOD__ . ' - Error creating ' . $this->cache_table_name . ' record!');
+						log_message('error', __METHOD__ . ' - ' . sprintf($this->CI->lang->line('ci_flickr_api_error_creating_cache'), $this->cache_table_name), '%2$s');
 					}
 				}
 			}
 		}
 		else
 		{
-			log_message('error', __METHOD__ . ' - All parameters were not passed or correct.');
+			log_message('error', __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_params_error'), '%2$s');
 		}
 		return FALSE;
 	}
@@ -445,7 +446,7 @@ class Flickr_API {
 							if (FALSE === $this->_send_soap($params)) return FALSE;
 							break;
 						default:
-							$this->_error(TRUE, __METHOD__ . ' - Invalid Request Format "' . $this->request_format . '".', '%2$s');
+							$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('ci_flickr_api_invalid_request_format'), $this->request_format), '%2$s');
 							return FALSE;
 							break;
 					}
@@ -455,12 +456,12 @@ class Flickr_API {
 			}
 			else
 			{
-				$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
+				$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_params_error'), '%2$s');
 			}
 		}
 		else
 		{
-			$this->_error(TRUE, __METHOD__ . ' - Required config(s) missing.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_required_config_missing'), '%2$s');
 		}
 		return FALSE;
 	}
@@ -494,13 +495,13 @@ class Flickr_API {
 			}
 			else
 			{
-				$this->_error(curl_errno($session), curl_error($session), 'There has been a problem sending your command to the server. Error #%s: "%s"');
+				$this->_error(curl_errno($session), curl_error($session), $this->CI->lang->line('ci_flickr_api_send_request_error'));
 				curl_close($session);
 			}
 		}
 		else
 		{
-			$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_params_error'), '%2$s');
 		}
 		return FALSE;
 	}
@@ -531,12 +532,12 @@ class Flickr_API {
 			}
 			else
 			{
-				$this->_error($this->CI->xmlrpc->result->errno, $this->CI->xmlrpc->display_error(), 'There has been a problem sending your command to the server. Error #%s: "%s"');
+				$this->_error($this->CI->xmlrpc->result->errno, $this->CI->xmlrpc->display_error(), $this->CI->lang->line('ci_flickr_api_send_request_error'));
 			}
 		}
 		else
 		{
-			$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_params_error'), '%2$s');
 		}
 		return FALSE;
 	}
@@ -568,7 +569,7 @@ class Flickr_API {
 						}
 						else
 						{
-							$this->_error(TRUE, __METHOD__ . ' - SimpleXMLElement class does not exist.', '%2$s');
+							$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_simplexmlelement_missing'), '%2$s');
 						}
 						break;
 					case self::RESPONSE_FORMAT_SOAP:
@@ -586,23 +587,23 @@ class Flickr_API {
 						}
 						else
 						{
-							$this->_error($response['code'], $response['message'], 'The Flickr API returned the following error: #%s: "%s"');
+							$this->_error($response['code'], $response['message'], $this->CI->lang->line('ci_flickr_api_returned_error'));
 						}
 						break;
 					default:
-						$this->_error(TRUE, __METHOD__ . ' - Invalid Response Format "' . $this->response_format . '".', '%2$s');
+						$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('ci_flickr_api_invalid_response_format'), $this->response_format), '%2$s');
 						return FALSE;
 						break;
 				}
 			}
 			else
 			{
-				$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
+				$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_params_error'), '%2$s');
 			}
 		}
 		else
 		{
-			$this->_error(TRUE, __METHOD__ . ' - Required config(s) missing.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_required_config_missing'), '%2$s');
 		}
 		return FALSE;
 	}
@@ -675,7 +676,7 @@ class Flickr_API {
 		}
 		else
 		{
-			$this->_error(TRUE, __METHOD__ . ' - Required config(s) missing.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_required_config_missing'), '%2$s');
 		}
 		return FALSE;
 	}
@@ -709,7 +710,7 @@ class Flickr_API {
 					}
 					else
 					{
-						$this->_error(TRUE, __METHOD__ . ' - Missing original secret and format values for photo.', '%2$s');
+						$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_photo_missing_org_secret_format'), '%2$s');
 					}
 					break;
 				case self::PHOTO_SIZE_LARGE:
@@ -728,13 +729,13 @@ class Flickr_API {
 					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_s.jpg';
 					break;
 				default:
-					$this->_error(TRUE, __METHOD__ . ' - The size "' . $size . '" was not recognized.', '%2$s');
+					$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('ci_flickr_api_photo_size_unknown'), $size), '%2$s');
 					break;
 			}
 		}
 		else
 		{
-			$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_params_error'), '%2$s');
 		}
 		return FALSE;
 	}
@@ -767,7 +768,7 @@ class Flickr_API {
 		}
 		else
 		{
-			$this->_error(TRUE, __METHOD__ . ' - All parameters were not passed or correct.', '%2$s');
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('ci_flickr_api_params_error'), '%2$s');
 		}
 		return FALSE;
 	}
@@ -775,7 +776,7 @@ class Flickr_API {
 	// --------------------------------------------------------------------------
 	
 	
-	// Functions need to be finished
+	// Functions needing to be finished
 	
 	function sync_upload ($photo, $title = null, $description = null, $tags = null, $is_public = null, $is_friend = null, $is_family = null) {
 		$upload_req =& new HTTP_Request();

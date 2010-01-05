@@ -75,7 +75,7 @@ class Flickr_API {
 	{
 		// Set the super object to a local variable for use throughout the class
 		$this->CI =& get_instance();
-		$this->CI->lang->load('ci_flickr_api');
+		$this->CI->lang->load('flickr_api');
 		
 		// Initialize Parameters
 		$this->initialize($params);

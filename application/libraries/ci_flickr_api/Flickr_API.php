@@ -78,7 +78,7 @@ class Flickr_API {
 		$this->CI->lang->load($this->CI->config->item('language'), 'ci_flickr_api');
 		
 		// Initialize Parameters
-		if (count($params) > 0) $this->initialize($params);
+		$this->initialize($params);
 		
 		// Start cache if enabled
 		if (TRUE === $this->cache_use_db) $this->start_cache(TRUE);
@@ -97,7 +97,7 @@ class Flickr_API {
 	 */
 	public function initialize($params = array())
 	{
-		if (count($params) > 0)
+		if (is_array($params) && !empty($params))
 		{
 			// Protect restricted variables
 			unset($params['CI']);

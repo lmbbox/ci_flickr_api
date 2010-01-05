@@ -75,13 +75,10 @@ class Flickr_API {
 	{
 		// Set the super object to a local variable for use throughout the class
 		$this->CI =& get_instance();
-		$this->CI->lang->load($this->CI->config->item('language'), 'ci_flickr_api');
+		$this->CI->lang->load('ci_flickr_api');
 		
 		// Initialize Parameters
 		$this->initialize($params);
-		
-		// Start cache if enabled
-		if (TRUE === $this->cache_use_db) $this->start_cache(TRUE);
 		
 		log_message('debug', 'Flickr_API Class Initialized');
 	}
@@ -114,6 +111,9 @@ class Flickr_API {
 				}
 			}
 		}
+		
+		// Start cache if enabled
+		if (TRUE === $this->cache_use_db) $this->start_cache(TRUE);
 	}
 	
 	// --------------------------------------------------------------------

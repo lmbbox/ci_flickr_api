@@ -9,7 +9,7 @@
  * @copyright	Copyright (c) 2009 - 2010, LMB^Box
  * @license		GNU Lesser General Public License (http://www.gnu.org/copyleft/lgpl.html)
  * @link		http://lmbbox.com/projects/ci-flickr-api/
- * @since		Version 0.2
+ * @version		Version 0.3
  * @filesource
  */
 
@@ -23,9 +23,11 @@
  * @category	Flickr API
  * @author		LMB^Box (Thomas Montague)
  * @link		http://codeigniter.lmbbox.com/user_guide/libraries/flickr_api.html
+ * @version		Version 0.3
  */
 class Flickr_API {
 	
+	const VERSION						= 0.3;
 	const API_AUTH_URL					= 'http://www.flickr.com/services/auth/'; // http://www.23hq.com/services/auth/
 	const API_REST_URL					= 'http://api.flickr.com/services/rest/';
 	const API_XMLRPC_URL				= 'http://api.flickr.com/services/xmlrpc/';
@@ -141,16 +143,14 @@ class Flickr_API {
 	 */
 	public function set_token($token)
 	{
-		if (!empty($token))
-		{
-			$this->token = (string) $token;
-			return TRUE;
-		}
-		else
+		if ('' == $token = trim((string) $token))
 		{
 			log_message('error', __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
 		}
-		return FALSE;
+		
+		$this->token = $token;
+		return TRUE;
 	}
 	
 	// --------------------------------------------------------------------
@@ -192,19 +192,20 @@ class Flickr_API {
 	 */
 	public function cleanup_cache()
 	{
-		if (TRUE === $this->cache_use_db AND $this->cache_table_name != '')
+		if (FALSE === $this->cache_use_db || '' == $this->cache_table_name)
 		{
-			if ($this->CI->db->count_all($this->cache_table_name) > $this->cache_max_rows)
-			{
-				$this->CI->db->where('expire_date <', time() - $this->cache_expiration);
-				$this->CI->db->delete($this->cache_table_name);
-				
-				$this->CI->load->dbutil();
-				$this->CI->dbutil->optimize_table($this->cache_table_name);
-			}
-			return TRUE;
+			return FALSE;
 		}
-		return FALSE;
+		
+		if ($this->CI->db->count_all($this->cache_table_name) > $this->cache_max_rows)
+		{
+			$this->CI->db->where('expire_date <', time() - $this->cache_expiration);
+			$this->CI->db->delete($this->cache_table_name);
+			
+			$this->CI->load->dbutil();
+			$this->CI->dbutil->optimize_table($this->cache_table_name);
+		}
+		return TRUE;
 	}
 	
 	// --------------------------------------------------------------------
@@ -217,25 +218,26 @@ class Flickr_API {
 	 */
 	protected function _create_table_cache()
 	{
-		if (TRUE === $this->cache_use_db AND $this->cache_table_name != '')
+		if (FALSE === $this->cache_use_db || '' == $this->cache_table_name)
 		{
-			$this->CI->load->database();
-			if (FALSE === $this->CI->db->table_exists($this->cache_table_name))
-			{
-				$fields['request'] = array('type' => 'CHAR', 'constraint' => '35', 'null' => FALSE);
-				$fields['response'] = array('type' => 'MEDIUMTEXT', 'null' => FALSE);
-				$fields['expire_date'] = array('type' => 'INT', 'constraint' => '10', 'unsigned' => TRUE, 'null' => FALSE, 'default' => '0');
-				
-				$this->CI->load->dbforge();
-				$this->CI->dbforge->add_field($fields);
-				$this->CI->dbforge->add_key('request', TRUE);
-				$this->CI->dbforge->create_table($this->cache_table_name, TRUE);
-				
-				$this->CI->db->query('ALTER TABLE `' . $this->CI->db->dbprefix . $this->cache_table_name . '` ENGINE=InnoDB;');
-			}
-			return TRUE;
+			return FALSE;
 		}
-		return FALSE;
+		
+		$this->CI->load->database();
+		if (FALSE === $this->CI->db->table_exists($this->cache_table_name))
+		{
+			$fields['request'] = array('type' => 'CHAR', 'constraint' => '35', 'null' => FALSE);
+			$fields['response'] = array('type' => 'MEDIUMTEXT', 'null' => FALSE);
+			$fields['expire_date'] = array('type' => 'INT', 'constraint' => '10', 'unsigned' => TRUE, 'null' => FALSE, 'default' => '0');
+			
+			$this->CI->load->dbforge();
+			$this->CI->dbforge->add_field($fields);
+			$this->CI->dbforge->add_key('request', TRUE);
+			$this->CI->dbforge->create_table($this->cache_table_name);
+			
+//			$this->CI->db->query('ALTER TABLE `' . $this->CI->db->dbprefix . $this->cache_table_name . '` ENGINE=InnoDB;');
+		}
+		return TRUE;
 	}
 	
 	// --------------------------------------------------------------------
@@ -249,27 +251,29 @@ class Flickr_API {
 	 */
 	protected function _get_cached($request)
 	{
-		if (is_array($request) && !empty($request))
-		{
-			if (TRUE === $this->cache_use_db AND $this->cache_table_name != '')
-			{
-				$this->CI->db->select('response');
-				$this->CI->db->where('request', md5(serialize($request)));
-				$this->CI->db->where('expire_date >=', time() - $this->cache_expiration);
-				$query = $this->CI->db->get($this->cache_table_name);
-				
-				if ($query->num_rows() > 0)
-				{
-					$row = $query->result_array();
-					return $row[0]['response'];
-				}
-			}
-		}
-		else
+		if (!is_array($request) || empty($request))
 		{
 			log_message('error', __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
 		}
-		return FALSE;
+		
+		if (FALSE === $this->cache_use_db || '' == $this->cache_table_name)
+		{
+			return FALSE;
+		}
+		
+		$this->CI->db->select('response');
+		$this->CI->db->where('request', md5(serialize($request)));
+		$this->CI->db->where('expire_date >=', time() - $this->cache_expiration);
+		$query = $this->CI->db->get($this->cache_table_name);
+		
+		if ($query->num_rows() == 0)
+		{
+			return FALSE;
+		}
+		
+		$row = $query->result_array();
+		return $row[0]['response'];
 	}
 	
 	// --------------------------------------------------------------------
@@ -284,52 +288,48 @@ class Flickr_API {
 	 */
 	protected function _cache($request, $response)
 	{
-		if (is_array($request) && !empty($request) && !empty($response))
+		if (!is_array($request) || empty($request) || empty($response))
 		{
-			if (TRUE === $this->cache_use_db AND $this->cache_table_name != '')
+			log_message('error', __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
+		}
+		
+		if (FALSE === $this->cache_use_db || '' == $this->cache_table_name)
+		{
+			return FALSE;
+		}
+		
+		$request_hash = md5(serialize($request));
+		
+		$this->CI->db->where('request', $request_hash);
+		$query = $this->CI->db->get($this->cache_table_name);
+		
+		if ($query->num_rows() == 1)
+		{
+			$this->CI->db->set('response', $response);
+			$this->CI->db->set('expire_date', time() + $this->cache_expiration);
+			$this->CI->db->where('request', $request_hash);
+			$this->CI->db->update($this->cache_table_name);
+			
+			if ($this->CI->db->affected_rows() != 1)
 			{
-				$request_hash = md5(serialize($request));
-				
-				$this->CI->db->where('request', $request_hash);
-				$query = $this->CI->db->get($this->cache_table_name);
-				
-				if ($query->num_rows() > 0)
-				{
-					$this->CI->db->set('response', $response);
-					$this->CI->db->set('expire_date', time() + $this->cache_expiration);
-					$this->CI->db->where('request', $request_hash);
-					$this->CI->db->update($this->cache_table_name);
-					
-					if ($this->CI->db->affected_rows() == 1)
-					{
-						return TRUE;
-					}
-					else
-					{
-						log_message('error', __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_error_updating_cache'), $this->cache_table_name), '%2$s');
-					}
-				}
-				else
-				{
-					$this->CI->db->set('request', $request_hash);
-					$this->CI->db->set('response', $response);
-					$this->CI->db->set('expire_date', time() + $this->cache_expiration);
-					if (TRUE === $this->CI->db->insert($this->cache_table_name))
-					{
-						return TRUE;
-					}
-					else
-					{
-						log_message('error', __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_error_creating_cache'), $this->cache_table_name), '%2$s');
-					}
-				}
+				log_message('error', __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_error_updating_cache'), $this->cache_table_name), '%2$s');
+				return FALSE;
 			}
 		}
 		else
 		{
-			log_message('error', __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			$this->CI->db->set('request', $request_hash);
+			$this->CI->db->set('response', $response);
+			$this->CI->db->set('expire_date', time() + $this->cache_expiration);
+			if (FALSE === $this->CI->db->insert($this->cache_table_name))
+			{
+				log_message('error', __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_error_creating_cache'), $this->cache_table_name), '%2$s');
+				return FALSE;
+			}
 		}
-		return FALSE;
+		
+		return TRUE;
 	}
 	
 	// --------------------------------------------------------------------
@@ -359,7 +359,11 @@ class Flickr_API {
 	 */
 	protected function _error($error_code, $error_message, $exit_message)
 	{
-		if (TRUE === $this->debug) log_message('debug', sprintf($exit_message, $error_code, $error_message));
+		if (TRUE === $this->debug)
+		{
+			log_message('debug', sprintf($exit_message, $error_code, $error_message));
+		}
+		
 		if (TRUE === $this->exit_on_error)
 		{
 			exit(sprintf($exit_message, $error_code, $error_message));
@@ -410,60 +414,82 @@ class Flickr_API {
 	 */
 	public function request($method, $params = array(), $nocache = FALSE)
 	{
-		if (!empty($this->request_format) && !empty($this->response_format) && !empty($this->api_key) && !empty($this->secret))
-		{
-			if (!empty($method) && is_array($params))
-			{
-				foreach ($params as $param => $value) if (is_null($value)) unset($params[$param]);
-				
-				$params = array_merge($params, array('method' => $method, 'api_key' => $this->api_key, 'format' => $this->response_format));
-				if (!empty($this->token)) $params = array_merge($params, array('auth_token' => $this->token));
-				ksort($params);
-				
-				$this->_reset_error();
-				$this->response = $this->_get_cached($params);
-				
-				if (FALSE === $this->response || TRUE === $nocache)
-				{
-					if (self::REQUEST_FORMAT_XMLRPC == $this->request_format) unset($params['method']);
-					if (!empty($this->secret))
-					{
-						$auth_sig = '';
-						foreach ($params as $param => $value) $auth_sig .= $param . $value;
-						$api_sig = md5($this->secret . $auth_sig);
-						$params = array_merge($params, array('api_sig' => $api_sig));
-					}
-					
-					switch ($this->request_format)
-					{
-						case self::REQUEST_FORMAT_REST:
-							if (FALSE === $this->_send_rest($params)) return FALSE;
-							break;
-						case self::REQUEST_FORMAT_XMLRPC:
-							if (FALSE === $this->_send_xmlrpc($params)) return FALSE;
-							break;
-						case self::REQUEST_FORMAT_SOAP:
-							if (FALSE === $this->_send_soap($params)) return FALSE;
-							break;
-						default:
-							$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_invalid_request_format'), $this->request_format), '%2$s');
-							return FALSE;
-							break;
-					}
-				}
-				
-				return TRUE === $this->parse_response ? $this->parsed_response = $this->parse_response($this->response) : $this->response;
-			}
-			else
-			{
-				$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
-			}
-		}
-		else
+		if ('' == $this->request_format || '' == $this->response_format || '' == $this->api_key || '' == $this->secret)
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_required_config_missing'), '%2$s');
+			return FALSE;
 		}
-		return FALSE;
+		
+		if ('' == $method || !is_array($params))
+		{
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
+		}
+		
+		foreach ($params as $param => $value)
+		{
+			if (is_null($value))
+			{
+				unset($params[$param]);
+			}
+		}
+		
+		$params = array_merge($params, array('method' => $method, 'api_key' => $this->api_key, 'format' => $this->response_format));
+		if ('' != $this->token)
+		{
+			$params = array_merge($params, array('auth_token' => $this->token));
+		}
+		ksort($params);
+		
+		$this->_reset_error();
+		$this->response = $this->_get_cached($params);
+		
+		if (FALSE === $this->response || TRUE === $nocache)
+		{
+			if (self::REQUEST_FORMAT_XMLRPC == $this->request_format)
+			{
+				unset($params['method']);
+			}
+			
+			if ('' != $this->secret)
+			{
+				$auth_sig = '';
+				foreach ($params as $param => $value)
+				{
+					$auth_sig .= $param . $value;
+				}
+				$api_sig = md5($this->secret . $auth_sig);
+				$params = array_merge($params, array('api_sig' => $api_sig));
+			}
+			
+			switch ($this->request_format)
+			{
+				case self::REQUEST_FORMAT_REST:
+					if (FALSE === $this->_send_rest($params))
+					{
+						return FALSE;
+					}
+					break;
+				case self::REQUEST_FORMAT_XMLRPC:
+					if (FALSE === $this->_send_xmlrpc($params))
+					{
+						return FALSE;
+					}
+					break;
+				case self::REQUEST_FORMAT_SOAP:
+					if (FALSE === $this->_send_soap($params))
+					{
+						return FALSE;
+					}
+					break;
+				default:
+					$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_invalid_request_format'), $this->request_format), '%2$s');
+					return FALSE;
+					break;
+			}
+		}
+		
+		return TRUE === $this->parse_response ? $this->parsed_response = $this->parse_response($this->response) : $this->response;
 	}
 	
 	// --------------------------------------------------------------------
@@ -477,33 +503,34 @@ class Flickr_API {
 	 */
 	protected function _send_rest($params)
 	{
-		if (is_array($params) && !empty($params))
-		{
-			$session = curl_init(self::API_REST_URL);
-			curl_setopt($session, CURLOPT_POST, TRUE);
-			curl_setopt($session, CURLOPT_POSTFIELDS, $params);
-			curl_setopt($session, CURLOPT_RETURNTRANSFER, TRUE);
-			curl_setopt($session, CURLOPT_FAILONERROR, TRUE);
-			$this->response = curl_exec($session);
-			if (TRUE === $this->debug) log_message('debug', __METHOD__ . ' - cURL Request Info: ' . print_r(curl_getinfo($session), TRUE));
-			
-			if (FALSE !== $this->response)
-			{
-				$this->_cache($params, $this->response);
-				curl_close($session);
-				return TRUE;
-			}
-			else
-			{
-				$this->_error(curl_errno($session), curl_error($session), $this->CI->lang->line('flickr_api_send_request_error'));
-				curl_close($session);
-			}
-		}
-		else
+		if (!is_array($params) || empty($params))
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
 		}
-		return FALSE;
+		
+		$session = curl_init(self::API_REST_URL);
+		curl_setopt($session, CURLOPT_POST, TRUE);
+		curl_setopt($session, CURLOPT_POSTFIELDS, $params);
+		curl_setopt($session, CURLOPT_RETURNTRANSFER, TRUE);
+		curl_setopt($session, CURLOPT_FAILONERROR, TRUE);
+		$this->response = curl_exec($session);
+		
+		if (TRUE === $this->debug)
+		{
+			log_message('debug', __METHOD__ . ' - cURL Request Info: ' . print_r(curl_getinfo($session), TRUE));
+		}
+		
+		if (FALSE === $this->response)
+		{
+			$this->_error(curl_errno($session), curl_error($session), $this->CI->lang->line('flickr_api_send_request_error'));
+			curl_close($session);
+			return FALSE;
+		}
+		
+		curl_close($session);
+		$this->_cache($params, $this->response);
+		return TRUE;
 	}
 	
 	// --------------------------------------------------------------------
@@ -517,29 +544,27 @@ class Flickr_API {
 	 */
 	protected function _send_xmlrpc($params)
 	{
-		if (is_array($params) && !empty($params) && !empty($params['method']))
-		{
-			$this->CI->load->library('xmlrpc');
-			if (TRUE === $this->debug) $this->CI->xmlrpc->set_debug(TRUE);
-			$this->CI->xmlrpc->server(self::API_XMLRPC_URL);
-			$this->CI->xmlrpc->method($params['method']);
-			$this->CI->xmlrpc->request(array(array($params, 'struct')));
-			if ($this->CI->xmlrpc->send_request())
-			{
-				$this->response = $this->CI->xmlrpc->display_response();
-				$this->_cache($params, $this->response);
-				return TRUE;
-			}
-			else
-			{
-				$this->_error($this->CI->xmlrpc->result->errno, $this->CI->xmlrpc->display_error(), $this->CI->lang->line('flickr_api_send_request_error'));
-			}
-		}
-		else
+		if (!is_array($params) || empty($params) || '' == $params['method'])
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
 		}
-		return FALSE;
+		
+		$this->CI->load->library('xmlrpc');
+		$this->CI->xmlrpc->set_debug(TRUE === $this->debug ? TRUE : FALSE);
+		$this->CI->xmlrpc->server(self::API_XMLRPC_URL);
+		$this->CI->xmlrpc->method($params['method']);
+		$this->CI->xmlrpc->request(array(array($params, 'struct')));
+		
+		if (FALSE === $this->CI->xmlrpc->send_request())
+		{
+			$this->_error($this->CI->xmlrpc->result->errno, $this->CI->xmlrpc->display_error(), $this->CI->lang->line('flickr_api_send_request_error'));
+			return FALSE;
+		}
+		
+		$this->response = $this->CI->xmlrpc->display_response();
+		$this->_cache($params, $this->response);
+		return TRUE;
 	}
 	
 	// --------------------------------------------------------------------
@@ -553,59 +578,54 @@ class Flickr_API {
 	 */
 	public function parse_response($response)
 	{
-		if (!empty($this->response_format))
-		{
-			if (!empty($response))
-			{
-				switch ($this->response_format)
-				{
-					case self::RESPONSE_FORMAT_REST:
-						
-						break;
-					case self::RESPONSE_FORMAT_XMLRPC:
-						if (class_exists('SimpleXMLElement'))
-						{
-							return new SimpleXMLElement($response);
-						}
-						else
-						{
-							$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_simplexmlelement_missing'), '%2$s');
-						}
-						break;
-					case self::RESPONSE_FORMAT_SOAP:
-						
-						break;
-					case self::RESPONSE_FORMAT_JSON:
-						
-						break;
-					case self::RESPONSE_FORMAT_PHP_SERIAL:
-						$response = $this->_parse_php_serial(unserialize($response));
-						
-						if ($response['stat'] == 'ok')
-						{
-							return $response;
-						}
-						else
-						{
-							$this->_error($response['code'], $response['message'], $this->CI->lang->line('flickr_api_returned_error'));
-						}
-						break;
-					default:
-						$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_invalid_response_format'), $this->response_format), '%2$s');
-						return FALSE;
-						break;
-				}
-			}
-			else
-			{
-				$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
-			}
-		}
-		else
+		if ('' == $this->response_format)
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_required_config_missing'), '%2$s');
+			return FALSE;
 		}
-		return FALSE;
+		
+		if ('' == $response)
+		{
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
+		}
+		
+		switch ($this->response_format)
+		{
+			case self::RESPONSE_FORMAT_REST:
+				
+				break;
+			case self::RESPONSE_FORMAT_XMLRPC:
+				if (!class_exists('SimpleXMLElement'))
+				{
+					$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_simplexmlelement_missing'), '%2$s');
+					return FALSE;
+				}
+				
+				return new SimpleXMLElement($response);
+				break;
+			case self::RESPONSE_FORMAT_SOAP:
+				
+				break;
+			case self::RESPONSE_FORMAT_JSON:
+				
+				break;
+			case self::RESPONSE_FORMAT_PHP_SERIAL:
+				$response = $this->_parse_php_serial(unserialize($response));
+				
+				if ($response['stat'] != 'ok')
+				{
+					$this->_error($response['code'], $response['message'], $this->CI->lang->line('flickr_api_returned_error'));
+					return FALSE;
+				}
+				
+				return $response;
+				break;
+			default:
+				$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_invalid_response_format'), $this->response_format), '%2$s');
+				return FALSE;
+				break;
+		}
 	}
 	
 	// --------------------------------------------------------------------
@@ -653,32 +673,30 @@ class Flickr_API {
 	 */
 	public function authenticate($permission = 'read', $redirect = NULL)
 	{
-		if (!empty($this->api_key) && !empty($this->secret))
+		if ('' == $this->api_key || '' == $this->secret)
 		{
-			$this->_reset_error();
-			if (empty($this->token))
-			{
-				$this->CI->load->helper('url');
-				$redirect = is_null($redirect) ? uri_string() : $redirect;
-				$api_sig = md5($this->secret . 'api_key' . $this->api_key . 'extra' . $redirect . 'perms' . $permission);
-				header('Location: ' . self::API_AUTH_URL . '?api_key=' . $this->api_key . '&extra=' . $redirect . '&perms=' . $permission . '&api_sig='. $api_sig);
-				exit();
-			}
-			else
-			{
-				$exit_on_error = $this->exit_on_error;
-				$this->exit_on_error = false;
-				$response = $this->auth_checkToken();
-				if (FALSE !== $this->get_error_code()) $this->auth($permission, $redirect);
-				$this->exit_on_error = $exit_on_error;
-				return $response['perms'];
-			}
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_required_config_missing'), '%2$s');
+			return FALSE;
+		}
+		
+		$this->_reset_error();
+		if (empty($this->token))
+		{
+			$this->CI->load->helper('url');
+			$redirect = is_null($redirect) ? uri_string() : $redirect;
+			$api_sig = md5($this->secret . 'api_key' . $this->api_key . 'extra' . $redirect . 'perms' . $permission);
+			header('Location: ' . self::API_AUTH_URL . '?api_key=' . $this->api_key . '&extra=' . $redirect . '&perms=' . $permission . '&api_sig='. $api_sig);
+			exit();
 		}
 		else
 		{
-			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_required_config_missing'), '%2$s');
+			$exit_on_error = $this->exit_on_error;
+			$this->exit_on_error = false;
+			$response = $this->auth_checkToken();
+			if (FALSE !== $this->get_error_code()) $this->authenticate($permission, $redirect);
+			$this->exit_on_error = $exit_on_error;
+			return $response['perms'];
 		}
-		return FALSE;
 	}
 	
 	// --------------------------------------------------------------------
@@ -699,45 +717,43 @@ class Flickr_API {
 	 */
 	public function get_photo_url($id, $farm, $server, $secret, $size = self::PHOTO_SIZE_MEDIUM, $original_secret = '', $original_format = '')
 	{
-		if (!empty($id) && !empty($farm) && !empty($server) && !empty($secret))
-		{
-			switch ($size)
-			{
-				case self::PHOTO_SIZE_ORIGINAL:
-					if (!empty($original_secret) && !empty($original_format))
-					{
-						return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $original_secret . '_o.' . $original_format;
-					}
-					else
-					{
-						$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_photo_missing_org_secret_format'), '%2$s');
-					}
-					break;
-				case self::PHOTO_SIZE_LARGE:
-					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_b.jpg';
-					break;
-				case self::PHOTO_SIZE_MEDIUM:
-					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '.jpg';
-					break;
-				case self::PHOTO_SIZE_SMALL:
-					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_m.jpg';
-					break;
-				case self::PHOTO_SIZE_THUMBNAIL:
-					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_t.jpg';
-					break;
-				case self::PHOTO_SIZE_SQUARE:
-					return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_s.jpg';
-					break;
-				default:
-					$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_photo_size_unknown'), $size), '%2$s');
-					break;
-			}
-		}
-		else
+		if (empty($id) || empty($farm) || empty($server) || empty($secret))
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
 		}
-		return FALSE;
+		
+		switch ($size)
+		{
+			case self::PHOTO_SIZE_ORIGINAL:
+				if ('' == $original_secret && '' == $original_format)
+				{
+					$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_photo_missing_org_secret_format'), '%2$s');
+					return FALSE;
+				}
+				
+				return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $original_secret . '_o.' . $original_format;
+				break;
+			case self::PHOTO_SIZE_LARGE:
+				return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_b.jpg';
+				break;
+			case self::PHOTO_SIZE_MEDIUM:
+				return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '.jpg';
+				break;
+			case self::PHOTO_SIZE_SMALL:
+				return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_m.jpg';
+				break;
+			case self::PHOTO_SIZE_THUMBNAIL:
+				return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_t.jpg';
+				break;
+			case self::PHOTO_SIZE_SQUARE:
+				return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_s.jpg';
+				break;
+			default:
+				$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_photo_size_unknown'), $size), '%2$s');
+				return FALSE;
+				break;
+		}
 	}
 	
 	// --------------------------------------------------------------------
@@ -755,22 +771,20 @@ class Flickr_API {
 	 */
 	public function get_buddy_icon_url($nsid, $icon_farm, $icon_server, $return_default = TRUE)
 	{
-		if (!empty($nsid) && !empty($icon_farm))
-		{
-			if ($icon_server > 0)
-			{
-				return 'http://farm' . $icon_farm . '.static.flickr.com/' . $icon_server . '/buddyicons/' . $nsid . '.jpg';
-			}
-			elseif (TRUE === $return_default)
-			{
-				return 'http://www.flickr.com/images/buddyicon.jpg';
-			}
-		}
-		else
+		if ('' == $nsid || empty($icon_farm))
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
 		}
-		return FALSE;
+		
+		if ($icon_server > 0)
+		{
+			return 'http://farm' . $icon_farm . '.static.flickr.com/' . $icon_server . '/buddyicons/' . $nsid . '.jpg';
+		}
+		elseif (TRUE === $return_default)
+		{
+			return 'http://www.flickr.com/images/buddyicon.jpg';
+		}
 	}
 	
 	// --------------------------------------------------------------------------
@@ -1682,61 +1696,159 @@ class Flickr_API {
 		return $this->request('flickr.panda.getPhotos', array('panda_name' => $panda_name, 'extras' => $extras, 'per_page' => $per_page, 'page' => $page));
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* People methods */
-	/* http://www.flickr.com/services/api/flickr.people.findByEmail.html */
+	/**
+	 * People Find By Email
+	 * 
+	 * Return a user's NSID, given their email address
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.people.findByEmail.html
+	 * @param	string $find_email
+	 * @return	mixed
+	 */
 	public function people_findByEmail($find_email)
 	{
 		return $this->request('flickr.people.findByEmail', array('find_email' => $find_email));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.people.findByUsername.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * People Find By Username
+	 * 
+	 * Return a user's NSID, given their username.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.people.findByUsername.html
+	 * @param	string $username
+	 * @return	mixed
+	 */
 	public function people_findByUsername($username)
 	{
 		return $this->request('flickr.people.findByUsername', array('username' => $username));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.people.getInfo.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * People Get Info
+	 * 
+	 * Get information about a user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.people.getInfo.html
+	 * @param	string $user_id
+	 * @return	mixed
+	 */
 	public function people_getInfo($user_id)
 	{
 		return $this->request('flickr.people.getInfo', array('user_id' => $user_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.people.getPublicGroups.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * People Get Public Groups
+	 * 
+	 * Returns the list of public groups a user is a member of.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.people.getPublicGroups.html
+	 * @param	string $user_id
+	 * @return	mixed
+	 */
 	public function people_getPublicGroups($user_id)
 	{
 		return $this->request('flickr.people.getPublicGroups', array('user_id' => $user_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.people.getPublicPhotos.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * People Get Public Photos
+	 * 
+	 * Get a list of public photos for the given user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.people.getPublicPhotos.html
+	 * @param	string $user_id
+	 * @param	int $safe_search Safe search setting: 1 for safe, 2 for moderate, 3 for restricted.
+	 * @param	string $extras
+	 * @param	int $per_page
+	 * @param	int $page
+	 * @return	mixed
+	 */
 	public function people_getPublicPhotos($user_id, $safe_search = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
 	{
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
 		return $this->request('flickr.people.getPublicPhotos', array('user_id' => $user_id, 'safe_search' => $safe_search, 'extras' => $extras, 'per_page' => $per_page, 'page' => $page));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.people.getUploadStatus.html */
-	/* Requires Authentication */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * People Get Upload Status
+	 * 
+	 * Returns information for the calling user related to photo uploads.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.people.getUploadStatus.html
+	 * @return	mixed
+	 */
 	public function people_getUploadStatus()
 	{
 		return $this->request('flickr.people.getUploadStatus');
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Photos Methods */
-	/* http://www.flickr.com/services/api/flickr.photos.addTags.html */
+	/**
+	 * Photos Add Tags
+	 * 
+	 * Add tags to a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.addTags.html
+	 * @param	int $photo_id
+	 * @param	string $tags
+	 * @return	mixed
+	 */
 	public function photos_addTags($photo_id, $tags)
 	{
 		return $this->request('flickr.photos.addTags', array('photo_id' => $photo_id, 'tags' => $tags), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.delete.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Delete
+	 * 
+	 * Delete a photo from flickr.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.delete.html
+	 * @param	int $photo_id
+	 * @return	mixed
+	 */
 	public function photos_delete($photo_id)
 	{
 		return $this->request('flickr.photos.delete', array('photo_id' => $photo_id), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getAllContexts.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get All Contexts
+	 * 
+	 * Returns all visible sets and pools the photo belongs to.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getAllContexts.html
+	 * @param	int $photo_id
+	 * @return	mixed
+	 */
 	public function photos_getAllContexts($photo_id)
 	{
 		return $this->request('flickr.photos.getAllContexts', array('photo_id' => $photo_id));

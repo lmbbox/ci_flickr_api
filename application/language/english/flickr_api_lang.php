@@ -1,4 +1,19 @@
 <?php  if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+/**
+ * CodeIgniter Flickr API
+ *
+ * A Flickr API Library for CodeIgniter based off phpFlickr (http://phpflickr.com/)
+ *
+ * @package		CodeIgniter Flickr API
+ * @author		LMB^Box (Thomas Montague)
+ * @copyright	Copyright (c) 2009 - 2010, LMB^Box
+ * @license		GNU Lesser General Public License (http://www.gnu.org/copyleft/lgpl.html)
+ * @link		http://lmbbox.com/projects/ci-flickr-api/
+ * @version		Version 0.3
+ * @filesource
+ */
+
+// ------------------------------------------------------------------------
 
 $lang['flickr_api_required_config_missing'] = 'Required config(s) missing.';
 $lang['flickr_api_params_error'] = 'All parameters were not passed or correct.';

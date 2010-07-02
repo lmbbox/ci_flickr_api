@@ -1285,6 +1285,40 @@ class Flickr_API {
 	// --------------------------------------------------------------------------
 	
 	/**
+	 * Contacts Add
+	 * 
+	 * Adds an user to a user's contact list.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.favorites.add.html
+	 * @param	int $photo_id
+	 * @return	mixed
+	 */
+	public function contacts_add($user_id, $friend = NULL, $family = NULL)
+	{
+		return $this->request('flickr.contacts.add', array('user_id' => $user_id, 'friend' => $friend, 'family' => $family), TRUE);
+	}
+	
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Contacts Remove
+	 * 
+	 * Removes an user from a user's contact list.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.favorites.add.html
+	 * @param	int $photo_id
+	 * @return	mixed
+	 */
+	public function contacts_remove($user_id)
+	{
+		return $this->request('flickr.contacts.remove', array('user_id' => $user_id), TRUE);
+	}
+	
+	// --------------------------------------------------------------------------
+	
+	/**
 	 * Favorites Add
 	 * 
 	 * Adds a photo to a user's favorites list.
@@ -1854,14 +1888,41 @@ class Flickr_API {
 		return $this->request('flickr.photos.getAllContexts', array('photo_id' => $photo_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getContactsPhotos.html */
+	/**
+	 * Photos Get Contact Photos
+	 * 
+	 * Fetch a list of recent photos from the calling users' contacts.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getContactsPhotos.html
+	 * @param	int $count
+	 * @param	bool $just_friends
+	 * @param	bool $single_photo
+	 * @param	bool $include_self
+	 * @param	string $extras
+	 * @return	mixed
+	 */
 	public function photos_getContactsPhotos($count = NULL, $just_friends = NULL, $single_photo = NULL, $include_self = NULL, $extras = NULL)
 	{
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
 		return $this->request('flickr.photos.getContactsPhotos', array('count' => $count, 'just_friends' => $just_friends, 'single_photo' => $single_photo, 'include_self' => $include_self, 'extras' => $extras));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getContactsPublicPhotos.html */
+	/**
+	 * Photos Get Contacts Public Photos
+	 * 
+	 * Fetch a list of recent public photos from a users' contacts.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getContactsPublicPhotos.html
+	 * @param	string $user_id
+	 * @param	int $count
+	 * @param	bool $just_friends
+	 * @param	bool $single_photo
+	 * @param	bool $include_self
+	 * @param	string $extras
+	 * @return	mixed
+	 */
 	public function photos_getContactsPublicPhotos($user_id, $count = NULL, $just_friends = NULL, $single_photo = NULL, $include_self = NULL, $extras = NULL)
 	{
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;

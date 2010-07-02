@@ -1226,6 +1226,23 @@ class Flickr_API {
 	// --------------------------------------------------------------------------
 	
 	/**
+	 * Contacts Add
+	 * 
+	 * Adds an user to a user's contact list.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.favorites.add.html
+	 * @param	int $photo_id
+	 * @return	mixed
+	 */
+	public function contacts_add($user_id, $friend = NULL, $family = NULL)
+	{
+		return $this->request('flickr.contacts.add', array('user_id' => $user_id, 'friend' => $friend, 'family' => $family), TRUE);
+	}
+	
+	// --------------------------------------------------------------------------
+	
+	/**
 	 * Contacts Get List
 	 * 
 	 * Get a list of contacts for the calling user.
@@ -1280,23 +1297,6 @@ class Flickr_API {
 	public function contacts_getListRecentlyUploaded($date_lastupload = NULL, $filter = NULL)
 	{
 		return $this->request('flickr.contacts.getListRecentlyUploaded', array('date_lastupload' => $date_lastupload, 'filter' => $filter));
-	}
-	
-	// --------------------------------------------------------------------------
-	
-	/**
-	 * Contacts Add
-	 * 
-	 * Adds an user to a user's contact list.
-	 * 
-	 * @access	public
-	 * @link	http://www.flickr.com/services/api/flickr.favorites.add.html
-	 * @param	int $photo_id
-	 * @return	mixed
-	 */
-	public function contacts_add($user_id, $friend = NULL, $family = NULL)
-	{
-		return $this->request('flickr.contacts.add', array('user_id' => $user_id, 'friend' => $friend, 'family' => $family), TRUE);
 	}
 	
 	// --------------------------------------------------------------------------

@@ -1,9 +1,9 @@
 <?php  if ( ! defined('BASEPATH')) exit('No direct script access allowed');
 /**
  * CodeIgniter Flickr API
- *
+ * 
  * A Flickr API Library for CodeIgniter based off phpFlickr (http://phpflickr.com/)
- *
+ * 
  * @package		CodeIgniter Flickr API
  * @author		LMB^Box (Thomas Montague)
  * @copyright	Copyright (c) 2009 - 2010, LMB^Box
@@ -17,10 +17,10 @@
 
 /**
  * Flickr API Class
- *
+ * 
  * @package		CodeIgniter Flickr API
  * @subpackage	Libraries
- * @category	Flickr API
+ * @category	Libraries
  * @author		LMB^Box (Thomas Montague)
  * @link		http://codeigniter.lmbbox.com/user_guide/libraries/flickr_api.html
  * @version		Version 0.3
@@ -68,9 +68,9 @@ class Flickr_API {
 	
 	/**
 	 * Constructor
-	 *
+	 * 
 	 * @access	public
-	 * @param	array $params initialization parameters
+	 * @param	array	$params	Initialization parameters
 	 * @return	void
 	 */
 	public function __construct($params = array())
@@ -89,9 +89,9 @@ class Flickr_API {
 	
 	/**
 	 * Initialize Preferences
-	 *
+	 * 
 	 * @access	public
-	 * @param	array $params initialization parameters
+	 * @param	array	$params	Initialization parameters
 	 * @return	void
 	 */
 	public function initialize($params = array())
@@ -121,10 +121,12 @@ class Flickr_API {
 	// --------------------------------------------------------------------
 	
 	/**
-	 * Toggle Debugging
+	 * Set Debug
+	 * 
+	 * Toggle debugging on and off.
 	 * 
 	 * @access	public
-	 * @param	bool $debug
+	 * @param	bool	$debug
 	 * @return	void
 	 */
 	public function set_debug($debug)
@@ -135,10 +137,12 @@ class Flickr_API {
 	// --------------------------------------------------------------------
 	
 	/**
-	 * Set current authentication token
+	 * Set Token
+	 * 
+	 * Set current Flickr user authentication token.
 	 * 
 	 * @access	public
-	 * @param	string $token authentication token
+	 * @param	string	$token	Flickr user authentication token
 	 * @return	bool
 	 */
 	public function set_token($token)
@@ -159,7 +163,7 @@ class Flickr_API {
 	 * Start Cache
 	 * 
 	 * @access	public
-	 * @param	bool $run_cleanup
+	 * @param	bool $run_cleanup	Run cache clean up process or not
 	 * @return	void
 	 */
 	public function start_cache($run_cleanup = FALSE)
@@ -187,6 +191,8 @@ class Flickr_API {
 	/**
 	 * Cleanup Cache
 	 * 
+	 * Delete expired cache records from DB.
+	 * 
 	 * @access	public
 	 * @return	bool
 	 */
@@ -212,6 +218,8 @@ class Flickr_API {
 	
 	/**
 	 * Create Cache Table
+	 * 
+	 * Check if cache table exists and if not, create it.
 	 * 
 	 * @access	protected
 	 * @return	bool
@@ -246,7 +254,7 @@ class Flickr_API {
 	 * Get Cached Request
 	 * 
 	 * @access	protected
-	 * @param	array $request
+	 * @param	array	$request
 	 * @return	string|bool
 	 */
 	protected function _get_cached($request)
@@ -282,8 +290,8 @@ class Flickr_API {
 	 * Cache Request
 	 * 
 	 * @access	protected
-	 * @param	array $request
-	 * @param	string $response
+	 * @param	array	$request
+	 * @param	string	$response
 	 * @return	bool
 	 */
 	protected function _cache($request, $response)
@@ -352,9 +360,9 @@ class Flickr_API {
 	 * Set Error
 	 * 
 	 * @access	protected
-	 * @param	string $error_code
-	 * @param	string $error_message
-	 * @param	string $exit_message
+	 * @param	string	$error_code
+	 * @param	string	$error_message
+	 * @param	string	$exit_message
 	 * @return	void
 	 */
 	protected function _error($error_code, $error_message, $exit_message)
@@ -407,9 +415,9 @@ class Flickr_API {
 	 * Request
 	 * 
 	 * @access	public
-	 * @param	string $method flickr api method
-	 * @param	array $params method arguments
-	 * @param	bool $nocache use cache or not
+	 * @param	string	$method		Flickr API method
+	 * @param	array	$params		Method arguments
+	 * @param	bool	$nocache	Use cache or not
 	 * @return	mixed
 	 */
 	public function request($method, $params = array(), $nocache = FALSE)
@@ -498,7 +506,7 @@ class Flickr_API {
 	 * Send Rest API Call
 	 * 
 	 * @access	protected
-	 * @param	array $params flickr api call
+	 * @param	array	$params	Flickr API call
 	 * @return	bool
 	 */
 	protected function _send_rest($params)
@@ -539,7 +547,7 @@ class Flickr_API {
 	 * Send XMLRPC API Call
 	 * 
 	 * @access	protected
-	 * @param	array $params flickr api call
+	 * @param	array	$params	Flickr API call
 	 * @return	bool
 	 */
 	protected function _send_xmlrpc($params)
@@ -573,7 +581,7 @@ class Flickr_API {
 	 * Parse Response
 	 * 
 	 * @access	public
-	 * @param	string $response flickr api call response
+	 * @param	string	$response	Flickr API call response
 	 * @return	mixed
 	 */
 	public function parse_response($response)
@@ -634,7 +642,7 @@ class Flickr_API {
 	 * Parse PHP Serial Response
 	 * 
 	 * @access	protected
-	 * @param	mixed $response
+	 * @param	mixed	$response
 	 * @return	mixed
 	 */
 	protected function _parse_php_serial($response)
@@ -667,8 +675,8 @@ class Flickr_API {
 	 * Authenticate
 	 * 
 	 * @access	public
-	 * @param	string $permission api account permission level
-	 * @param	string $redirect redirection url
+	 * @param	string	$permission	API account permission level
+	 * @param	string	$redirect	Redirection url
 	 * @return	string|bool
 	 */
 	public function authenticate($permission = 'read', $redirect = NULL)
@@ -705,13 +713,13 @@ class Flickr_API {
 	 * Get Photo URL
 	 * 
 	 * @access	public
-	 * @param	int|string $id
-	 * @param	int|string $farm
-	 * @param	int|string $server
-	 * @param	string $secret
-	 * @param	string $size
-	 * @param	string $original_secret
-	 * @param	string $original_format
+	 * @param	int|string	$id
+	 * @param	int|string	$farm
+	 * @param	int|string	$server
+	 * @param	string		$secret
+	 * @param	string		$size
+	 * @param	string		$original_secret
+	 * @param	string		$original_format
 	 * @return	string|bool
 	 * @static
 	 */
@@ -762,10 +770,10 @@ class Flickr_API {
 	 * Get Buddy Icon URL
 	 * 
 	 * @access	public
-	 * @param	string $nsid
-	 * @param	int|string $icon_farm
-	 * @param	int|string $icon_server
-	 * @param	bool $return_default
+	 * @param	string		$nsid
+	 * @param	int|string	$icon_farm
+	 * @param	int|string	$icon_server
+	 * @param	bool		$return_default
 	 * @return	string|bool
 	 * @static
 	 */
@@ -1019,8 +1027,8 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.activity.userComments.html
-	 * @param	int $page
-	 * @param	int $per_page
+	 * @param	int		$page
+	 * @param	int		$per_page
 	 * @return	mixed
 	 */
 	public function activity_userComments($per_page = NULL, $page = NULL)
@@ -1038,9 +1046,9 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.activity.userPhotos.html
-	 * @param	string $timeframe
-	 * @param	int $page
-	 * @param	int $per_page
+	 * @param	string	$timeframe
+	 * @param	int		$page
+	 * @param	int		$per_page
 	 * @return	mixed
 	 */
 	public function activity_userPhotos($timeframe = NULL, $per_page = NULL, $page = NULL)
@@ -1092,7 +1100,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.auth.getFullToken.html
-	 * @param	string $mini_token
+	 * @param	string	$mini_token
 	 * @return	mixed
 	 */
 	public function auth_getFullToken($mini_token)
@@ -1110,7 +1118,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.auth.getToken.html
-	 * @param	string $frob
+	 * @param	string	$frob
 	 * @return	mixed
 	 */
 	public function auth_getToken($frob)
@@ -1127,7 +1135,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.blogs.getList.html
-	 * @param	string $service
+	 * @param	string	$service
 	 * @return	mixed
 	 */
 	public function blogs_getList($service = NULL)
@@ -1158,12 +1166,12 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.blogs.postPhoto.html
-	 * @param	string $blog_id
-	 * @param	int $photo_id
-	 * @param	string $title
-	 * @param	string $description
-	 * @param	string $blog_password
-	 * @param	string $service
+	 * @param	string	$blog_id
+	 * @param	int		$photo_id
+	 * @param	string	$title
+	 * @param	string	$description
+	 * @param	string	$blog_password
+	 * @param	string	$service
 	 * @return	mixed
 	 */
 	public function blogs_postPhoto($blog_id = NULL, $photo_id, $title, $description, $blog_password = NULL, $service = NULL)
@@ -1181,7 +1189,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.collections.getInfo.html
-	 * @param	string $collection_id
+	 * @param	string	$collection_id
 	 * @return	mixed
 	 */
 	public function collections_getInfo($collection_id)
@@ -1198,8 +1206,8 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.collections.getTree.html
-	 * @param	string $collection_id
-	 * @param	string $user_id
+	 * @param	string	$collection_id
+	 * @param	string	$user_id
 	 * @return	mixed
 	 */
 	public function collections_getTree($collection_id = NULL, $user_id = NULL)
@@ -1231,8 +1239,8 @@ class Flickr_API {
 	 * Adds an user to a user's contact list.
 	 * 
 	 * @access	public
-	 * @link	http://www.flickr.com/services/api/flickr.favorites.add.html
-	 * @param	int $photo_id
+	 * @link	http://www.flickr.com/services/api/flickr.contacts.add.html
+	 * @param	int		$photo_id
 	 * @return	mixed
 	 */
 	public function contacts_add($user_id, $friend = NULL, $family = NULL)
@@ -1249,9 +1257,9 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.contacts.getList.html
-	 * @param	string $filter
-	 * @param	int $page
-	 * @param	int $per_page
+	 * @param	string	$filter
+	 * @param	int		$page
+	 * @param	int		$per_page
 	 * @return	mixed
 	 */
 	public function contacts_getList($filter = NULL, $page = NULL, $per_page = NULL)
@@ -1268,9 +1276,9 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.contacts.getPublicList.html
-	 * @param	string $user_id
-	 * @param	int $page
-	 * @param	int $per_page
+	 * @param	string	$user_id
+	 * @param	int		$page
+	 * @param	int		$per_page
 	 * @return	mixed
 	 */
 	public function contacts_getPublicList($user_id, $page = NULL, $per_page = NULL)
@@ -1290,8 +1298,8 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.contacts.getListRecentlyUploaded.html
-	 * @param	int $date_lastupload
-	 * @param	string $filter
+	 * @param	int		$date_lastupload
+	 * @param	string	$filter
 	 * @return	mixed
 	 */
 	public function contacts_getListRecentlyUploaded($date_lastupload = NULL, $filter = NULL)
@@ -1307,8 +1315,8 @@ class Flickr_API {
 	 * Removes an user from a user's contact list.
 	 * 
 	 * @access	public
-	 * @link	http://www.flickr.com/services/api/flickr.favorites.add.html
-	 * @param	int $photo_id
+	 * @link	http://www.flickr.com/services/api/flickr.contacts.remove.html
+	 * @param	int		$photo_id
 	 * @return	mixed
 	 */
 	public function contacts_remove($user_id)
@@ -1325,7 +1333,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.favorites.add.html
-	 * @param	int $photo_id
+	 * @param	int		$photo_id
 	 * @return	mixed
 	 */
 	public function favorites_add($photo_id)
@@ -1343,12 +1351,12 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.favorites.getList.html
-	 * @param	string $user_id
-	 * @param	int $min_fave_date
-	 * @param	int $max_fave_date
-	 * @param	string $extras
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$user_id
+	 * @param	int		$min_fave_date
+	 * @param	int		$max_fave_date
+	 * @param	string	$extras
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function favorites_getList($user_id = NULL, $min_fave_date = NULL, $max_fave_date = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
@@ -1366,12 +1374,12 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.favorites.getPublicList.html
-	 * @param	string $user_id
-	 * @param	int $min_fave_date
-	 * @param	int $max_fave_date
-	 * @param	string $extras
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$user_id
+	 * @param	int		$min_fave_date
+	 * @param	int		$max_fave_date
+	 * @param	string	$extras
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function favorites_getPublicList($user_id, $min_fave_date = NULL, $max_fave_date = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
@@ -1389,7 +1397,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.favorites.remove.html
-	 * @param	int $photo_id
+	 * @param	int		$photo_id
 	 * @return	mixed
 	 */
 	public function favorites_remove($photo_id)
@@ -1406,7 +1414,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.groups.browse.html
-	 * @param	int $cat_id
+	 * @param	int		$cat_id
 	 * @return	mixed
 	 */
 	public function groups_browse($cat_id = NULL)
@@ -1423,8 +1431,8 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.groups.getInfo.html
-	 * @param	string $group_id
-	 * @param	string $lang
+	 * @param	string	$group_id
+	 * @param	string	$lang
 	 * @return	mixed
 	 */
 	public function groups_getInfo($group_id, $lang = NULL)
@@ -1442,9 +1450,9 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.groups.search.html
-	 * @param	string $text
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$text
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function groups_search($text, $per_page = NULL, $page = NULL)
@@ -1463,10 +1471,10 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.groups.members.getList.html
-	 * @param	string $group_id
-	 * @param	string $membertypes
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$group_id
+	 * @param	string	$membertypes
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function groups_members_getList($group_id, $membertypes = NULL, $per_page = NULL, $page = NULL)
@@ -1483,8 +1491,8 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.groups.pools.add.html
-	 * @param	int $photo_id
-	 * @param	string $group_id
+	 * @param	int		$photo_id
+	 * @param	string	$group_id
 	 * @return	mixed
 	 */
 	public function groups_pools_add($photo_id, $group_id)
@@ -1501,8 +1509,8 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.groups.pools.getContext.html
-	 * @param	int $photo_id
-	 * @param	string $group_id
+	 * @param	int		$photo_id
+	 * @param	string	$group_id
 	 * @return	mixed
 	 */
 	public function groups_pools_getContext($photo_id, $group_id)
@@ -1519,8 +1527,8 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.groups.pools.getGroups.html
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function groups_pools_getGroups($page = NULL, $per_page = NULL)
@@ -1538,12 +1546,12 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.groups.pools.getPhotos.html
-	 * @param	string $group_id
-	 * @param	string $tags
-	 * @param	string $user_id
-	 * @param	string $extras
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$group_id
+	 * @param	string	$tags
+	 * @param	string	$user_id
+	 * @param	string	$extras
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function groups_pools_getPhotos($group_id, $tags = NULL, $user_id = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
@@ -1561,8 +1569,8 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.groups.pools.remove.html
-	 * @param	int $photo_id
-	 * @param	string $group_id
+	 * @param	int		$photo_id
+	 * @param	string	$group_id
 	 * @return	mixed
 	 */
 	public function groups_pools_remove($photo_id, $group_id)
@@ -1580,10 +1588,10 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.interestingness.getList.html
-	 * @param	string $date
-	 * @param	string $extras
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$date
+	 * @param	string	$extras
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function interestingness_getList($date = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
@@ -1602,9 +1610,9 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.machinetags.getNamespaces.html
-	 * @param	string $predicate
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$predicate
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function machinetags_getNamespaces($predicate = NULL, $per_page = NULL, $page = NULL)
@@ -1622,10 +1630,10 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.machinetags.getPairs.html
-	 * @param	string $namespace
-	 * @param	string $predicate
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$namespace
+	 * @param	string	$predicate
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function machinetags_getPairs($namespace = NULL, $predicate = NULL, $per_page = NULL, $page = NULL)
@@ -1643,9 +1651,9 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.machinetags.getPredicates.html
-	 * @param	string $namespace
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$namespace
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function machinetags_getPredicates($namespace = NULL, $per_page = NULL, $page = NULL)
@@ -1662,9 +1670,9 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.machinetags.getRecentValues.html
-	 * @param	string $namespace
-	 * @param	string $predicate
-	 * @param	int $added_since
+	 * @param	string	$namespace
+	 * @param	string	$predicate
+	 * @param	int		$added_since
 	 * @return	mixed
 	 */
 	public function machinetags_getRecentValues($namespace = NULL, $predicate = NULL, $added_since = NULL)
@@ -1681,10 +1689,10 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.machinetags.getValues.html
-	 * @param	string $namespace
-	 * @param	string $predicate
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$namespace
+	 * @param	string	$predicate
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function machinetags_getValues($namespace, $predicate, $per_page = NULL, $page = NULL)
@@ -1718,10 +1726,10 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.panda.getPhotos.html
-	 * @param	string $panda_name
-	 * @param	string $extras
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$panda_name
+	 * @param	string	$extras
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	function panda_getPhotos($panda_name, $extras = NULL, $per_page = NULL, $page = NULL)
@@ -1739,7 +1747,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.people.findByEmail.html
-	 * @param	string $find_email
+	 * @param	string	$find_email
 	 * @return	mixed
 	 */
 	public function people_findByEmail($find_email)
@@ -1756,7 +1764,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.people.findByUsername.html
-	 * @param	string $username
+	 * @param	string	$username
 	 * @return	mixed
 	 */
 	public function people_findByUsername($username)
@@ -1773,7 +1781,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.people.getInfo.html
-	 * @param	string $user_id
+	 * @param	string	$user_id
 	 * @return	mixed
 	 */
 	public function people_getInfo($user_id)
@@ -1790,7 +1798,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.people.getPublicGroups.html
-	 * @param	string $user_id
+	 * @param	string	$user_id
 	 * @return	mixed
 	 */
 	public function people_getPublicGroups($user_id)
@@ -1807,11 +1815,11 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.people.getPublicPhotos.html
-	 * @param	string $user_id
-	 * @param	int $safe_search Safe search setting: 1 for safe, 2 for moderate, 3 for restricted.
-	 * @param	string $extras
-	 * @param	int $per_page
-	 * @param	int $page
+	 * @param	string	$user_id
+	 * @param	int		$safe_search	Safe search setting: 1 for safe, 2 for moderate, 3 for restricted.
+	 * @param	string	$extras
+	 * @param	int		$per_page
+	 * @param	int		$page
 	 * @return	mixed
 	 */
 	public function people_getPublicPhotos($user_id, $safe_search = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
@@ -1845,8 +1853,8 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.photos.addTags.html
-	 * @param	int $photo_id
-	 * @param	string $tags
+	 * @param	int		$photo_id
+	 * @param	string	$tags
 	 * @return	mixed
 	 */
 	public function photos_addTags($photo_id, $tags)
@@ -1863,7 +1871,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.photos.delete.html
-	 * @param	int $photo_id
+	 * @param	int		$photo_id
 	 * @return	mixed
 	 */
 	public function photos_delete($photo_id)
@@ -1880,7 +1888,7 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.photos.getAllContexts.html
-	 * @param	int $photo_id
+	 * @param	int		$photo_id
 	 * @return	mixed
 	 */
 	public function photos_getAllContexts($photo_id)
@@ -1895,11 +1903,11 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.photos.getContactsPhotos.html
-	 * @param	int $count
-	 * @param	bool $just_friends
-	 * @param	bool $single_photo
-	 * @param	bool $include_self
-	 * @param	string $extras
+	 * @param	int		$count
+	 * @param	bool	$just_friends
+	 * @param	bool	$single_photo
+	 * @param	bool	$include_self
+	 * @param	string	$extras
 	 * @return	mixed
 	 */
 	public function photos_getContactsPhotos($count = NULL, $just_friends = NULL, $single_photo = NULL, $include_self = NULL, $extras = NULL)
@@ -1915,12 +1923,12 @@ class Flickr_API {
 	 * 
 	 * @access	public
 	 * @link	http://www.flickr.com/services/api/flickr.photos.getContactsPublicPhotos.html
-	 * @param	string $user_id
-	 * @param	int $count
-	 * @param	bool $just_friends
-	 * @param	bool $single_photo
-	 * @param	bool $include_self
-	 * @param	string $extras
+	 * @param	string	$user_id
+	 * @param	int		$count
+	 * @param	bool	$just_friends
+	 * @param	bool	$single_photo
+	 * @param	bool	$include_self
+	 * @param	string	$extras
 	 * @return	mixed
 	 */
 	public function photos_getContactsPublicPhotos($user_id, $count = NULL, $just_friends = NULL, $single_photo = NULL, $include_self = NULL, $extras = NULL)

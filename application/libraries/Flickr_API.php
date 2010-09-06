@@ -43,6 +43,7 @@ class Flickr_API {
 	const RESPONSE_FORMAT_PHP_SERIAL	= 'php_serial';
 	const PHOTO_SIZE_ORIGINAL			= 'original';
 	const PHOTO_SIZE_LARGE				= 'large';
+	const PHOTO_SIZE_MEDIUM_640			= 'medium640';
 	const PHOTO_SIZE_MEDIUM				= 'medium';
 	const PHOTO_SIZE_SMALL				= 'small';
 	const PHOTO_SIZE_THUMBNAIL			= 'thumbnail';
@@ -710,7 +711,7 @@ class Flickr_API {
 	// --------------------------------------------------------------------
 	
 	/**
-	 * Get Photo URL
+	 * Get Photo Source
 	 * 
 	 * @access	public
 	 * @param	int|string	$id
@@ -723,7 +724,7 @@ class Flickr_API {
 	 * @return	string|bool
 	 * @static
 	 */
-	public function get_photo_url($id, $farm, $server, $secret, $size = self::PHOTO_SIZE_MEDIUM, $original_secret = '', $original_format = '')
+	public function get_photo_source($id, $farm, $server, $secret, $size = self::PHOTO_SIZE_MEDIUM, $original_secret = '', $original_format = '')
 	{
 		if (empty($id) || empty($farm) || empty($server) || empty($secret))
 		{
@@ -745,6 +746,9 @@ class Flickr_API {
 			case self::PHOTO_SIZE_LARGE:
 				return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_b.jpg';
 				break;
+			case self::PHOTO_SIZE_MEDIUM_640:
+				return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_z.jpg';
+				break;
 			case self::PHOTO_SIZE_MEDIUM:
 				return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '.jpg';
 				break;
@@ -756,6 +760,60 @@ class Flickr_API {
 				break;
 			case self::PHOTO_SIZE_SQUARE:
 				return 'http://farm' . $farm . '.static.flickr.com/' . $server . '/'. $id . '_' . $secret . '_s.jpg';
+				break;
+			default:
+				$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_photo_size_unknown'), $size), '%2$s');
+				return FALSE;
+				break;
+		}
+	}
+	
+	// --------------------------------------------------------------------
+	
+	/**
+	 * Get Photo URL
+	 * 
+	 * @access	public
+	 * @param	int|string	$id
+	 * @param	int|string	$farm
+	 * @param	int|string	$server
+	 * @param	string		$secret
+	 * @param	string		$size
+	 * @param	string		$original_secret
+	 * @param	string		$original_format
+	 * @return	string|bool
+	 * @static
+	 */
+	public function get_photo_url($owner_nsid, $photo_id, $size = self::PHOTO_SIZE_MEDIUM)
+	{
+		if (empty($user_id) || empty($photo_id))
+		{
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
+		}
+		
+		switch ($size)
+		{
+			case self::PHOTO_SIZE_ORIGINAL:
+				return 'http://www.flickr.com/photos/' . $owner_nsid . '/'. $photo_id . '/sizes/o/';
+				break;
+			case self::PHOTO_SIZE_LARGE:
+				return 'http://www.flickr.com/photos/' . $owner_nsid . '/'. $photo_id . '/sizes/l/';
+				break;
+			case self::PHOTO_SIZE_MEDIUM_640:
+				return 'http://www.flickr.com/photos/' . $owner_nsid . '/'. $photo_id . '/sizes/z/';
+				break;
+			case self::PHOTO_SIZE_MEDIUM:
+				return 'http://www.flickr.com/photos/' . $owner_nsid . '/'. $photo_id . '/sizes/m/';
+				break;
+			case self::PHOTO_SIZE_SMALL:
+				return 'http://www.flickr.com/photos/' . $owner_nsid . '/'. $photo_id . '/sizes/s/';
+				break;
+			case self::PHOTO_SIZE_THUMBNAIL:
+				return 'http://www.flickr.com/photos/' . $owner_nsid . '/'. $photo_id . '/sizes/t/';
+				break;
+			case self::PHOTO_SIZE_SQUARE:
+				return 'http://www.flickr.com/photos/' . $owner_nsid . '/'. $photo_id . '/sizes/sq/';
 				break;
 			default:
 				$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_photo_size_unknown'), $size), '%2$s');

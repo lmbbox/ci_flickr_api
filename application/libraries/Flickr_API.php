@@ -786,7 +786,7 @@ class Flickr_API {
 	 */
 	public function get_photo_url($owner_nsid, $photo_id, $size = self::PHOTO_SIZE_MEDIUM)
 	{
-		if (empty($user_id) || empty($photo_id))
+		if (empty($owner_nsid) || empty($photo_id))
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
 			return FALSE;

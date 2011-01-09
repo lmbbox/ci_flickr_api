@@ -752,7 +752,7 @@ class Flickr_API {
 		{
 			case self::RESPONSE_FORMAT_REST:
 			case self::RESPONSE_FORMAT_XMLRPC:
-				$response = (array) simplexml_load_string($response);
+				$response = simplexml_load_string($response);
 				if ('fail' == $response['stat'])
 				{
 					$this->_error($response->err['code'], $response->err['msg'], $this->CI->lang->line('flickr_api_returned_error'));

@@ -661,7 +661,8 @@ class Flickr_API {
 		
 		if (TRUE === $this->debug)
 		{
-			log_message('debug', __METHOD__ . ' - cURL Request Info: ' . print_r(curl_getinfo($session), TRUE));
+			log_message('debug', __METHOD__ . ' - cURL Request Info: ' . var_export(curl_getinfo($session), TRUE));
+			log_message('debug', __METHOD__ . ' - cURL Request Params: ' . var_export($params, TRUE));
 		}
 		
 		if (FALSE === $this->response)

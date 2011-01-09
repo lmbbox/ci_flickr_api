@@ -421,11 +421,10 @@ class Flickr_API {
 	 * @access	public
 	 * @param	string	$method		Flickr API method
 	 * @param	array	$params		Method arguments
-	 * @param	bool	$usecache	Use cache or not
-	 * @param	bool	$cache		Call _cache() or not with response
+	 * @param	bool	$nocache	Cache override
 	 * @return	mixed
 	 */
-	public function request($method, $params = array(), $usecache = TRUE, $cache = TRUE)
+	public function request($method, $params = array(), $nocache = FALSE)
 	{
 		if ('' == $this->request_format || '' == $this->response_format || '' == $this->api_key || '' == $this->secret)
 		{
@@ -447,7 +446,7 @@ class Flickr_API {
 		$this->_reset_error();
 		$this->response = $this->_get_cached($params);
 		
-		if (FALSE === $this->response || FALSE === $usecache)
+		if (FALSE === $this->response || TRUE === $nocache)
 		{
 			switch ($this->request_format)
 			{
@@ -476,7 +475,7 @@ class Flickr_API {
 			}
 		}
 		
-		if (TRUE === $cache)
+		if (FALSE === $nocache)
 		{
 			$this->_cache($params, $this->response);
 		}

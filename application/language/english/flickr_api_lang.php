@@ -23,7 +23,6 @@ $lang['flickr_api_invalid_request_format'] = 'Invalid Request Format "%s".';
 $lang['flickr_api_invalid_response_format'] = 'Invalid Response Format "%s".';
 $lang['flickr_api_send_request_error'] = 'There has been a problem sending your command to the server. Error #%s: "%s"';
 $lang['flickr_api_returned_error'] = 'The Flickr API returned the following error: #%s: "%s"';
-$lang['flickr_api_simplexmlelement_missing'] = 'SimpleXMLElement class does not exist.';
 $lang['flickr_api_photo_missing_org_secret_format'] = 'Missing original secret and/or format values for photo.';
 $lang['flickr_api_photo_size_unknown'] = 'The size "%s" was not recognized.';
 $lang['flickr_api_'] = '';

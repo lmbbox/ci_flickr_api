@@ -235,7 +235,7 @@ class Flickr_API {
 		$this->CI->load->database();
 		if (FALSE === $this->CI->db->table_exists($this->cache_table_name))
 		{
-			$fields['request'] = array('type' => 'CHAR', 'constraint' => '35', 'null' => FALSE);
+			$fields['request'] = array('type' => 'CHAR', 'constraint' => '40', 'null' => FALSE);
 			$fields['response'] = array('type' => 'MEDIUMTEXT', 'null' => FALSE);
 			$fields['expire_date'] = array('type' => 'INT', 'constraint' => '10', 'unsigned' => TRUE, 'null' => FALSE, 'default' => '0');
 			
@@ -271,8 +271,10 @@ class Flickr_API {
 			return FALSE;
 		}
 		
+		unset($request['api_sig']);
+		
 		$this->CI->db->select('response');
-		$this->CI->db->where('request', md5(serialize($request)));
+		$this->CI->db->where('request', sha1(serialize($request)));
 		$this->CI->db->where('expire_date >=', time() - $this->cache_expiration);
 		$query = $this->CI->db->get($this->cache_table_name);
 		
@@ -308,7 +310,8 @@ class Flickr_API {
 			return FALSE;
 		}
 		
-		$request_hash = md5(serialize($request));
+		unset($request['api_sig']);
+		$request_hash = sha1(serialize($request));
 		
 		$this->CI->db->where('request', $request_hash);
 		$query = $this->CI->db->get($this->cache_table_name);
@@ -418,10 +421,11 @@ class Flickr_API {
 	 * @access	public
 	 * @param	string	$method		Flickr API method
 	 * @param	array	$params		Method arguments
-	 * @param	bool	$nocache	Use cache or not
+	 * @param	bool	$usecache	Use cache or not
+	 * @param	bool	$cache		Call _cache() or not with response
 	 * @return	mixed
 	 */
-	public function request($method, $params = array(), $nocache = FALSE)
+	public function request($method, $params = array(), $usecache = TRUE, $cache = TRUE)
 	{
 		if ('' == $this->request_format || '' == $this->response_format || '' == $this->api_key || '' == $this->secret)
 		{
@@ -435,46 +439,20 @@ class Flickr_API {
 			return FALSE;
 		}
 		
-		foreach ($params as $param => $value)
+		if (FALSE === $params = $this->_build_params($params, $method, $this->response_format))
 		{
-			if (is_null($value))
-			{
-				unset($params[$param]);
-			}
+			return FALSE;
 		}
-		
-		$params = array_merge($params, array('method' => $method, 'api_key' => $this->api_key, 'format' => $this->response_format));
-		if ('' != $this->token)
-		{
-			$params = array_merge($params, array('auth_token' => $this->token));
-		}
-		ksort($params);
 		
 		$this->_reset_error();
 		$this->response = $this->_get_cached($params);
 		
-		if (FALSE === $this->response || TRUE === $nocache)
+		if (FALSE === $this->response || FALSE === $usecache)
 		{
-			if (self::REQUEST_FORMAT_XMLRPC == $this->request_format)
-			{
-				unset($params['method']);
-			}
-			
-			if ('' != $this->secret)
-			{
-				$auth_sig = '';
-				foreach ($params as $param => $value)
-				{
-					$auth_sig .= $param . $value;
-				}
-				$api_sig = md5($this->secret . $auth_sig);
-				$params = array_merge($params, array('api_sig' => $api_sig));
-			}
-			
 			switch ($this->request_format)
 			{
 				case self::REQUEST_FORMAT_REST:
-					if (FALSE === $this->_send_rest($params))
+					if (FALSE === $this->_curl_post(self::API_REST_URL, $params))
 					{
 						return FALSE;
 					}
@@ -498,27 +476,184 @@ class Flickr_API {
 			}
 		}
 		
-		return TRUE === $this->parse_response ? $this->parsed_response = $this->parse_response($this->response) : $this->response;
+		if (TRUE === $cache)
+		{
+			$this->_cache($params, $this->response);
+		}
+		return TRUE === $this->parse_response ? $this->parsed_response = $this->parse_response($this->response_format, $this->response) : $this->response;
 	}
 	
-	// --------------------------------------------------------------------
+	// --------------------------------------------------------------------------
 	
 	/**
-	 * Send Rest API Call
+	 * Upload Photo
 	 * 
-	 * @access	protected
-	 * @param	array	$params	Flickr API call
-	 * @return	bool
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/upload.api.html
+	 * @link	http://www.flickr.com/services/api/upload.async.html
+	 * @param	string	$photo	The file to upload.
+	 * @param	array	$args
+	 * @return	mixed
+	 * @static
 	 */
-	protected function _send_rest($params)
+	function upload($photo, $params = array())
 	{
-		if (!is_array($params) || empty($params))
+		if ('' == $this->api_key || '' == $this->secret)
+		{
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_required_config_missing'), '%2$s');
+			return FALSE;
+		}
+		
+		if ('' == $photo = realpath($photo) || !is_array($params))
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
 			return FALSE;
 		}
 		
-		$session = curl_init(self::API_REST_URL);
+		if (FALSE === $params = $this->_build_params($params))
+		{
+			return FALSE;
+		}
+		
+		$params['photo'] = '@' . $photo;
+		
+		$this->_reset_error();
+		
+		if (FALSE === $this->_curl_post(self::API_UPLOAD_URL, $params))
+		{
+			return FALSE;
+		}
+		
+		return $this->parsed_response = $this->parse_response(self::RESPONSE_FORMAT_REST, $this->response);
+	}
+	
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Replace Photo
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/replace.api.html
+	 * @param	string	$photo	The file to upload.
+	 * @param	int		$photo_id
+	 * @param	bool	$async
+	 * @return	mixed
+	 * @static
+	 */
+	function replace($photo, $photo_id, $async = NULL)
+	{
+		if ('' == $this->api_key || '' == $this->secret)
+		{
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_required_config_missing'), '%2$s');
+			return FALSE;
+		}
+		
+		if ('' == $photo = realpath($photo))
+		{
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
+		}
+		
+		$params['photo_id'] = $photo_id;
+		$params['async'] = $async;
+		
+		if (FALSE === $params = $this->_build_params($params))
+		{
+			return FALSE;
+		}
+		
+		$params['photo'] = '@' . $photo;
+		
+		$this->_reset_error();
+		
+		if (FALSE === $this->_curl_post(self::API_UPLOAD_URL, $params))
+		{
+			return FALSE;
+		}
+		
+		return $this->parsed_response = $this->parse_response(self::RESPONSE_FORMAT_REST, $this->response);
+	}
+	
+	// --------------------------------------------------------------------
+	
+	/**
+	 * Build API Call Parameters
+	 * 
+	 * @access	protected
+	 * @param	array	$params
+	 * @param	string	$method
+	 * @param	string	$response_format
+	 * @return	array
+	 */
+	protected function _build_params($params, $method = '', $response_format = '')
+	{
+		if ('' == $this->api_key || '' == $this->secret)
+		{
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_required_config_missing'), '%2$s');
+			return FALSE;
+		}
+		
+		if (!is_array($params))
+		{
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
+		}
+		
+		$params['api_key'] = $this->api_key;
+		
+		if ('' != $this->token)
+		{
+			$params['auth_token'] = $this->token;
+		}
+		
+		if ('' != $method)
+		{
+			$params['method'] = $method;
+		}
+		
+		if ('' != $response_format)
+		{
+			$params['format'] = $response_format;
+		}
+		
+		ksort($params);
+		$auth_sig = '';
+		
+		foreach ($params as $param => $value)
+		{
+			if (is_null($value))
+			{
+				unset($params[$param]);
+			}
+			else
+			{
+				$auth_sig .= $param . $value;
+			}
+		}
+		
+		$params['api_sig'] = md5($this->secret . $auth_sig);
+		return $params;
+	}
+	
+	// --------------------------------------------------------------------
+	
+	/**
+	 * cURL Post
+	 * 
+	 * @access	protected
+	 * @param	string	$url	Url to call
+	 * @param	array	$params	Flickr API call
+	 * @return	bool
+	 */
+	protected function _curl_post($url, $params)
+	{
+		if ('' == $url || !is_array($params) || empty($params))
+		{
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
+		}
+		
+		$session = curl_init($url);
 		curl_setopt($session, CURLOPT_POST, TRUE);
 		curl_setopt($session, CURLOPT_POSTFIELDS, $params);
 		curl_setopt($session, CURLOPT_RETURNTRANSFER, TRUE);
@@ -538,7 +673,6 @@ class Flickr_API {
 		}
 		
 		curl_close($session);
-		$this->_cache($params, $this->response);
 		return TRUE;
 	}
 	
@@ -563,6 +697,7 @@ class Flickr_API {
 		$this->CI->xmlrpc->set_debug(TRUE === $this->debug ? TRUE : FALSE);
 		$this->CI->xmlrpc->server(self::API_XMLRPC_URL);
 		$this->CI->xmlrpc->method($params['method']);
+		unset($params['method']);
 		$this->CI->xmlrpc->request(array(array($params, 'struct')));
 		
 		if (FALSE === $this->CI->xmlrpc->send_request())
@@ -572,7 +707,26 @@ class Flickr_API {
 		}
 		
 		$this->response = $this->CI->xmlrpc->display_response();
-		$this->_cache($params, $this->response);
+		return TRUE;
+	}
+	
+	// --------------------------------------------------------------------
+	
+	/**
+	 * Send SOAP API Call
+	 * 
+	 * @access	protected
+	 * @param	array	$params	Flickr API call
+	 * @return	bool
+	 */
+	protected function _send_soap($params)
+	{
+		if (!is_array($params) || empty($params))
+		{
+			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
+		}
+		
 		return TRUE;
 	}
 	
@@ -582,52 +736,57 @@ class Flickr_API {
 	 * Parse Response
 	 * 
 	 * @access	public
+	 * @param	string	$format		Response Format
 	 * @param	string	$response	Flickr API call response
 	 * @return	mixed
 	 */
-	public function parse_response($response)
+	public function parse_response($format, $response)
 	{
-		if ('' == $this->response_format)
-		{
-			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_required_config_missing'), '%2$s');
-			return FALSE;
-		}
-		
-		if ('' == $response)
+		if ('' == $format || '' == $response)
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
 			return FALSE;
 		}
 		
-		switch ($this->response_format)
+		switch ($format)
 		{
 			case self::RESPONSE_FORMAT_REST:
-				
-				break;
 			case self::RESPONSE_FORMAT_XMLRPC:
-				if (!class_exists('SimpleXMLElement'))
+				$response = (array) simplexml_load_string($response);
+				if ('fail' == $response['stat'])
 				{
-					$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_simplexmlelement_missing'), '%2$s');
+					$this->_error($response->err['code'], $response->err['msg'], $this->CI->lang->line('flickr_api_returned_error'));
 					return FALSE;
 				}
-				
-				return new SimpleXMLElement($response);
+				return $response;
 				break;
 			case self::RESPONSE_FORMAT_SOAP:
+				return $response;
+				//?
 				
+				if ('fail' == $response['stat'])
+				{
+					$this->_error($response->err['code'], $response->err['message'], $this->CI->lang->line('flickr_api_returned_error'));
+					return FALSE;
+				}
+				return $response;
 				break;
 			case self::RESPONSE_FORMAT_JSON:
-				
+				$response = json_decode(trim($response));
+				if ('fail' == $response['stat'])
+				{
+					$this->_error($response->err['code'], $response->err['message'], $this->CI->lang->line('flickr_api_returned_error'));
+					return FALSE;
+				}
+				return $response;
 				break;
 			case self::RESPONSE_FORMAT_PHP_SERIAL:
-				$response = $this->_parse_php_serial(unserialize($response));
-				
-				if ($response['stat'] != 'ok')
+				$response = $this->_parse_array(unserialize($response));
+				if ('fail' == $response['stat'])
 				{
 					$this->_error($response['code'], $response['message'], $this->CI->lang->line('flickr_api_returned_error'));
 					return FALSE;
 				}
-				
 				return $response;
 				break;
 			default:
@@ -640,13 +799,13 @@ class Flickr_API {
 	// --------------------------------------------------------------------
 	
 	/**
-	 * Parse PHP Serial Response
+	 * Parse Array Response
 	 * 
 	 * @access	protected
 	 * @param	mixed	$response
 	 * @return	mixed
 	 */
-	protected function _parse_php_serial($response)
+	protected function _parse_array($response)
 	{
 		if (!is_array($response))
 		{
@@ -664,7 +823,7 @@ class Flickr_API {
 		{
 			foreach ($response as $key => $value)
 			{
-				$response[$key] = $this->_parse_php_serial($value);
+				$response[$key] = $this->_parse_array($value);
 			}
 			return($response);
 		}
@@ -852,228 +1011,6 @@ class Flickr_API {
 			return 'http://www.flickr.com/images/buddyicon.jpg';
 		}
 	}
-	
-	// --------------------------------------------------------------------------
-	
-	
-	// Functions needing to be finished
-	
-	function sync_upload ($photo, $title = null, $description = null, $tags = null, $is_public = null, $is_friend = null, $is_family = null) {
-		$upload_req =& new HTTP_Request();
-		$upload_req->setMethod(HTTP_REQUEST_METHOD_POST);
-
-
-		$upload_req->setURL($this->Upload);
-		$upload_req->clearPostData();
-
-		//Process arguments, including method and login data.
-		$args = array("api_key" => $this->api_key, "title" => $title, "description" => $description, "tags" => $tags, "is_public" => $is_public, "is_friend" => $is_friend, "is_family" => $is_family);
-		if (!empty($this->email)) {
-			$args = array_merge($args, array("email" => $this->email));
-		}
-		if (!empty($this->password)) {
-			$args = array_merge($args, array("password" => $this->password));
-		}
-		if (!empty($this->token)) {
-			$args = array_merge($args, array("auth_token" => $this->token));
-		} elseif (!empty($_SESSION['phpFlickr_auth_token'])) {
-			$args = array_merge($args, array("auth_token" => $_SESSION['phpFlickr_auth_token']));
-		}
-
-		ksort($args);
-		$auth_sig = "";
-		foreach ($args as $key => $data) {
-			if ($data !== null) {
-				$auth_sig .= $key . $data;
-				$upload_req->addPostData($key, $data);
-			}
-		}
-		if (!empty($this->secret)) {
-			$api_sig = md5($this->secret . $auth_sig);
-			$upload_req->addPostData("api_sig", $api_sig);
-		}
-
-		$photo = realpath($photo);
-
-		$result = $upload_req->addFile("photo", $photo);
-
-		if (PEAR::isError($result)) {
-			die($result->getMessage());
-		}
-
-		//Send Requests
-		if ($upload_req->sendRequest()) {
-			$this->response = $upload_req->getResponseBody();
-		} else {
-			die("There has been a problem sending your command to the server.");
-		}
-
-		$rsp = explode("\n", $this->response);
-		foreach ($rsp as $line) {
-			if (ereg('<err code="([0-9]+)" msg="(.*)"', $line, $match)) {
-				if ($this->die_on_error)
-					die("The Flickr API returned the following error: #{$match[1]} - {$match[2]}");
-				else {
-					$this->error_code = $match[1];
-					$this->error_msg = $match[2];
-					$this->parsed_response = false;
-					return false;
-				}
-			} elseif (ereg("<photoid>(.*)</photoid>", $line, $match)) {
-				$this->error_code = false;
-				$this->error_msg = false;
-				return $match[1];
-			}
-		}
-	}
-
-	function async_upload ($photo, $title = null, $description = null, $tags = null, $is_public = null, $is_friend = null, $is_family = null) {
-		$upload_req =& new HTTP_Request();
-		$upload_req->setMethod(HTTP_REQUEST_METHOD_POST);
-
-		$upload_req->setURL($this->Upload);
-		$upload_req->clearPostData();
-
-		//Process arguments, including method and login data.
-		$args = array("async" => 1, "api_key" => $this->api_key, "title" => $title, "description" => $description, "tags" => $tags, "is_public" => $is_public, "is_friend" => $is_friend, "is_family" => $is_family);
-		if (!empty($this->email)) {
-			$args = array_merge($args, array("email" => $this->email));
-		}
-		if (!empty($this->password)) {
-			$args = array_merge($args, array("password" => $this->password));
-		}
-		if (!empty($this->token)) {
-			$args = array_merge($args, array("auth_token" => $this->token));
-		} elseif (!empty($_SESSION['phpFlickr_auth_token'])) {
-			$args = array_merge($args, array("auth_token" => $_SESSION['phpFlickr_auth_token']));
-		}
-
-		ksort($args);
-		$auth_sig = "";
-		foreach ($args as $key => $data) {
-			if ($data !== null) {
-				$auth_sig .= $key . $data;
-				$upload_req->addPostData($key, $data);
-			}
-		}
-		if (!empty($this->secret)) {
-			$api_sig = md5($this->secret . $auth_sig);
-			$upload_req->addPostData("api_sig", $api_sig);
-		}
-
-		$photo = realpath($photo);
-
-		$result = $upload_req->addFile("photo", $photo);
-
-		if (PEAR::isError($result)) {
-			die($result->getMessage());
-		}
-
-		//Send Requests
-		if ($upload_req->sendRequest()) {
-			$this->response = $upload_req->getResponseBody();
-		} else {
-			die("There has been a problem sending your command to the server.");
-		}
-
-		$rsp = explode("\n", $this->response);
-		foreach ($rsp as $line) {
-			if (ereg('<err code="([0-9]+)" msg="(.*)"', $line, $match)) {
-				if ($this->die_on_error)
-					die("The Flickr API returned the following error: #{$match[1]} - {$match[2]}");
-				else {
-					$this->error_code = $match[1];
-					$this->error_msg = $match[2];
-					$this->parsed_response = false;
-					return false;
-				}
-			} elseif (ereg("<ticketid>(.*)</", $line, $match)) {
-				$this->error_code = false;
-				$this->error_msg = false;
-				return $match[1];
-			}
-		}
-	}
-
-	// Interface for new replace API method.
-	function replace ($photo, $photo_id, $async = null) {
-		$upload_req =& new HTTP_Request();
-		$upload_req->setMethod(HTTP_REQUEST_METHOD_POST);
-
-		$upload_req->setURL($this->Replace);
-		$upload_req->clearPostData();
-
-		//Process arguments, including method and login data.
-		$args = array("api_key" => $this->api_key, "photo_id" => $photo_id, "async" => $async);
-		if (!empty($this->email)) {
-			$args = array_merge($args, array("email" => $this->email));
-		}
-		if (!empty($this->password)) {
-			$args = array_merge($args, array("password" => $this->password));
-		}
-		if (!empty($this->token)) {
-			$args = array_merge($args, array("auth_token" => $this->token));
-		} elseif (!empty($_SESSION['phpFlickr_auth_token'])) {
-			$args = array_merge($args, array("auth_token" => $_SESSION['phpFlickr_auth_token']));
-		}
-
-		ksort($args);
-		$auth_sig = "";
-		foreach ($args as $key => $data) {
-			if ($data !== null) {
-				$auth_sig .= $key . $data;
-				$upload_req->addPostData($key, $data);
-			}
-		}
-		if (!empty($this->secret)) {
-			$api_sig = md5($this->secret . $auth_sig);
-			$upload_req->addPostData("api_sig", $api_sig);
-		}
-
-		$photo = realpath($photo);
-
-		$result = $upload_req->addFile("photo", $photo);
-
-		if (PEAR::isError($result)) {
-			die($result->getMessage());
-		}
-
-		//Send Requests
-		if ($upload_req->sendRequest()) {
-			$this->response = $upload_req->getResponseBody();
-		} else {
-			die("There has been a problem sending your command to the server.");
-		}
-		if ($async == 1)
-			$find = 'ticketid';
-		 else
-			$find = 'photoid';
-
-		$rsp = explode("\n", $this->response);
-		foreach ($rsp as $line) {
-			if (ereg('<err code="([0-9]+)" msg="(.*)"', $line, $match)) {
-				if ($this->die_on_error)
-					die("The Flickr API returned the following error: #{$match[1]} - {$match[2]}");
-				else {
-					$this->error_code = $match[1];
-					$this->error_msg = $match[2];
-					$this->parsed_response = false;
-					return false;
-				}
-			} elseif (ereg("<" . $find . ">(.*)</", $line, $match)) {
-				$this->error_code = false;
-				$this->error_msg = false;
-				return $match[1];
-			}
-		}
-	}
-
-
-
-
-
-
-
 	
 	// --------------------------------------------------------------------------
 	

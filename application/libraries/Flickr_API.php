@@ -148,7 +148,7 @@ class Flickr_API {
 	 */
 	public function set_token($token)
 	{
-		if ('' == $token = trim((string) $token))
+		if ('' == ($token = trim((string) $token)))
 		{
 			log_message('error', __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
 			return FALSE;
@@ -438,7 +438,7 @@ class Flickr_API {
 			return FALSE;
 		}
 		
-		if (FALSE === $params = $this->_build_params($params, $method, $this->response_format))
+		if (FALSE === ($params = $this->_build_params($params, $method, $this->response_format)))
 		{
 			return FALSE;
 		}
@@ -503,13 +503,13 @@ class Flickr_API {
 			return FALSE;
 		}
 		
-		if ('' == $photo = realpath($photo) || !is_array($params))
+		if ('' == ($photo = realpath($photo)) || !is_array($params))
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
 			return FALSE;
 		}
 		
-		if (FALSE === $params = $this->_build_params($params))
+		if (FALSE === ($params = $this->_build_params($params)))
 		{
 			return FALSE;
 		}
@@ -547,7 +547,7 @@ class Flickr_API {
 			return FALSE;
 		}
 		
-		if ('' == $photo = realpath($photo))
+		if ('' == ($photo = realpath($photo)))
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
 			return FALSE;

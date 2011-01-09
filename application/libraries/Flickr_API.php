@@ -565,7 +565,7 @@ class Flickr_API {
 		
 		$this->_reset_error();
 		
-		if (FALSE === $this->_curl_post(self::API_UPLOAD_URL, $params))
+		if (FALSE === $this->_curl_post(self::API_REPLACE_URL, $params))
 		{
 			return FALSE;
 		}

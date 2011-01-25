@@ -9,7 +9,7 @@
  * @copyright	Copyright (c) 2009 - 2010, LMB^Box
  * @license		GNU Lesser General Public License (http://www.gnu.org/copyleft/lgpl.html)
  * @link		http://lmbbox.com/projects/ci-flickr-api/
- * @version		Version 0.3
+ * @version		Version 0.4
  * @filesource
  */
 
@@ -23,14 +23,15 @@
  * @category	Libraries
  * @author		LMB^Box (Thomas Montague)
  * @link		http://codeigniter.lmbbox.com/user_guide/libraries/flickr_api.html
- * @version		Version 0.3
+ * @version		Version 0.4
  */
 class Flickr_API {
 	
-	const VERSION						= 0.3;
-	const API_AUTH_URL					= 'http://www.flickr.com/services/auth/'; // http://www.23hq.com/services/auth/
+	const VERSION						= 0.4;
+	const API_AUTH_URL					= 'http://www.flickr.com/services/auth/';
 	const API_REST_URL					= 'http://api.flickr.com/services/rest/';
 	const API_XMLRPC_URL				= 'http://api.flickr.com/services/xmlrpc/';
+	const API_SOAP_URL					= 'http://api.flickr.com/services/soap/';
 	const API_UPLOAD_URL				= 'http://api.flickr.com/services/upload/';
 	const API_REPLACE_URL				= 'http://api.flickr.com/services/replace/';
 	const REQUEST_FORMAT_REST			= 'rest';
@@ -419,14 +420,19 @@ class Flickr_API {
 	 * Request
 	 * 
 	 * @access	public
-	 * @param	string	$method		Flickr API method
-	 * @param	array	$params		Method arguments
-	 * @param	bool	$nocache	Cache override
+	 * @param	string	$method				Flickr API method
+	 * @param	array	$params				Method arguments
+	 * @param	bool	$nocache			Cache override
+	 * @param	string	$request_format		Request Format
+	 * @param	string	$response_format	Response Format
 	 * @return	mixed
 	 */
-	public function request($method, $params = array(), $nocache = FALSE)
+	public function request($method, $params = array(), $nocache = FALSE, $request_format = NULL, $response_format = NULL)
 	{
-		if ('' == $this->request_format || '' == $this->response_format || '' == $this->api_key || '' == $this->secret)
+		$request_format = is_null($request_format) ? $this->request_format : $request_format;
+		$response_format = is_null($response_format) ? $this->response_format : $response_format;
+		
+		if ('' == $request_format || '' == $response_format || '' == $this->api_key || '' == $this->secret)
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_required_config_missing'), '%2$s');
 			return FALSE;
@@ -438,7 +444,7 @@ class Flickr_API {
 			return FALSE;
 		}
 		
-		if (FALSE === ($params = $this->_build_params($params, $method, $this->response_format)))
+		if (FALSE === ($params = $this->_build_params($params, $method, $response_format)))
 		{
 			return FALSE;
 		}
@@ -448,7 +454,7 @@ class Flickr_API {
 		
 		if (FALSE === $this->response || TRUE === $nocache)
 		{
-			switch ($this->request_format)
+			switch ($request_format)
 			{
 				case self::REQUEST_FORMAT_REST:
 					if (FALSE === $this->_curl_post(self::API_REST_URL, $params))
@@ -469,7 +475,7 @@ class Flickr_API {
 					}
 					break;
 				default:
-					$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_invalid_request_format'), $this->request_format), '%2$s');
+					$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_invalid_request_format'), $request_format), '%2$s');
 					return FALSE;
 					break;
 			}
@@ -479,7 +485,7 @@ class Flickr_API {
 		{
 			$this->_cache($params, $this->response);
 		}
-		return TRUE === $this->parse_response ? $this->parsed_response = $this->parse_response($this->response_format, $this->response) : $this->response;
+		return TRUE === $this->parse_response ? $this->parsed_response = $this->parse_response($response_format, $this->response) : $this->response;
 	}
 	
 	// --------------------------------------------------------------------------
@@ -721,9 +727,27 @@ class Flickr_API {
 	 */
 	protected function _send_soap($params)
 	{
-		if (!is_array($params) || empty($params))
+		if (!is_array($params) || empty($params) || '' == $params['method'])
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
+			return FALSE;
+		}
+		
+		$method = $params['method'];
+		unset($params['method']);
+		
+		$client = new SoapClient(NULL, array('location' => self::API_SOAP_URL, 'uri' => 'urn:flickr', 'trace' => TRUE, 'exceptions' => FALSE));
+		$this->response = $client->__soapCall($method, $params);
+		
+		if (TRUE === $this->debug)
+		{
+			log_message('debug', __METHOD__ . ' - SOAP Request: ' . var_export($client->__getLastRequest(), TRUE));
+			log_message('debug', __METHOD__ . ' - SOAP Request Params: ' . var_export($params, TRUE));
+		}
+		
+		if (TRUE === is_soap_fault($this->response))
+		{
+			$this->_error($this->response->faultcode, $this->response->faultstring, $this->CI->lang->line('flickr_api_send_request_error'));
 			return FALSE;
 		}
 		
@@ -753,44 +777,59 @@ class Flickr_API {
 			case self::RESPONSE_FORMAT_REST:
 			case self::RESPONSE_FORMAT_XMLRPC:
 				$response = simplexml_load_string($response);
+				
 				if ('fail' == $response['stat'])
 				{
 					$this->_error($response->err['code'], $response->err['msg'], $this->CI->lang->line('flickr_api_returned_error'));
 					return FALSE;
 				}
+				
 				return $response;
 				break;
 			case self::RESPONSE_FORMAT_SOAP:
-				return $response;
-				//?
+				if (TRUE === is_soap_fault($response))
+				{
+					$this->_error($response->faultcode, $response->faultstring, $this->CI->lang->line('flickr_api_returned_error'));
+					return FALSE;
+				}
+				
+				if ((is_array($response) && !empty($response)) || (FALSE === $response_parsed = @simplexml_load_string(preg_replace("/(<\/?)(\w+):([^>]*>)/", "$1$2$3", $response))))
+				{
+					return $response;
+				}
+				
+				if (TRUE === is_object($response_parsed->sBody->sFault))
+				{
+					$this->_error($response_parsed->sBody->sFault->faultcode, $response_parsed->sBody->sFault->faultstring, $this->CI->lang->line('flickr_api_returned_error'));
+					return FALSE;
+				}
+				
+				return $response_parsed->sBody->xFlickrResponse;
+				break;
+			case self::RESPONSE_FORMAT_JSON:
+				$response = json_decode(trim($response));
 				
 				if ('fail' == $response['stat'])
 				{
 					$this->_error($response->err['code'], $response->err['message'], $this->CI->lang->line('flickr_api_returned_error'));
 					return FALSE;
 				}
-				return $response;
-				break;
-			case self::RESPONSE_FORMAT_JSON:
-				$response = json_decode(trim($response));
-				if ('fail' == $response['stat'])
-				{
-					$this->_error($response->err['code'], $response->err['message'], $this->CI->lang->line('flickr_api_returned_error'));
-					return FALSE;
-				}
+				
 				return $response;
 				break;
 			case self::RESPONSE_FORMAT_PHP_SERIAL:
 				$response = $this->_parse_array(unserialize($response));
+				
 				if ('fail' == $response['stat'])
 				{
 					$this->_error($response['code'], $response['message'], $this->CI->lang->line('flickr_api_returned_error'));
 					return FALSE;
 				}
+				
 				return $response;
 				break;
 			default:
-				$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_invalid_response_format'), $this->response_format), '%2$s');
+				$this->_error(TRUE, __METHOD__ . ' - ' . sprintf($this->CI->lang->line('flickr_api_invalid_response_format'), $format), '%2$s');
 				return FALSE;
 				break;
 		}
@@ -1891,6 +1930,8 @@ class Flickr_API {
 		return $this->request('flickr.photos.getAllContexts', array('photo_id' => $photo_id));
 	}
 	
+	// --------------------------------------------------------------------------
+	
 	/**
 	 * Photos Get Contact Photos
 	 * 
@@ -1910,6 +1951,8 @@ class Flickr_API {
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
 		return $this->request('flickr.photos.getContactsPhotos', array('count' => $count, 'just_friends' => $just_friends, 'single_photo' => $single_photo, 'include_self' => $include_self, 'extras' => $extras));
 	}
+	
+	// --------------------------------------------------------------------------
 	
 	/**
 	 * Photos Get Contacts Public Photos
@@ -1932,629 +1975,1763 @@ class Flickr_API {
 		return $this->request('flickr.photos.getContactsPublicPhotos', array('user_id' => $user_id, 'count' => $count, 'just_friends' => $just_friends, 'single_photo' => $single_photo, 'include_self' => $include_self, 'extras' => $extras));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getContext.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Context
+	 * 
+	 * Returns next and previous photos for a photo in a photostream.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getContext.html
+	 * @param	int		$photo_id
+	 * @return	mixed
+	 */
 	public function photos_getContext($photo_id)
 	{
 		return $this->request('flickr.photos.getContext', array('photo_id' => $photo_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getCounts.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Counts
+	 * 
+	 * Gets a list of photo counts for the given date ranges for the calling user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getCounts.html
+	 * @param	int		$dates
+	 * @param	int		$taken_dates
+	 * @return	mixed
+	 */
 	public function photos_getCounts($dates = NULL, $taken_dates = NULL)
 	{
 		return $this->request('flickr.photos.getCounts', array('dates' => $dates, 'taken_dates' => $taken_dates));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getExif.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Exif
+	 * 
+	 * Retrieves a list of EXIF/TIFF/GPS tags for a given photo. The calling 
+	 * user must have permission to view the photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getExif.html
+	 * @param	int		$photo_id
+	 * @param	string	$secret
+	 * @return	mixed
+	 */
 	public function photos_getExif($photo_id, $secret = NULL)
 	{
 		return $this->request('flickr.photos.getExif', array('photo_id' => $photo_id, 'secret' => $secret));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getFavorites.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Favorites
+	 * 
+	 * Returns the list of people who have favorited a given photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getFavorites.html
+	 * @param	int		$photo_id
+	 * @param	int		$page
+	 * @param	int		$per_page
+	 * @return	mixed
+	 */
 	public function photos_getFavorites($photo_id, $page = NULL, $per_page = NULL)
 	{
 		return $this->request('flickr.photos.getFavorites', array('photo_id' => $photo_id, 'page' => $page, 'per_page' => $per_page));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getInfo.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Info
+	 * 
+	 * Get information about a photo. The calling user must have permission to 
+	 * view the photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getInfo.html
+	 * @param	int		$photo_id
+	 * @param	string	$secret
+	 * @return	mixed
+	 */
 	public function photos_getInfo($photo_id, $secret = NULL)
 	{
 		return $this->request('flickr.photos.getInfo', array('photo_id' => $photo_id, 'secret' => $secret));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getNotInSet.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Not In Set
+	 * 
+	 * Returns a list of your photos that are not part of any sets.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getNotInSet.html
+	 * @param	int		$min_upload_date
+	 * @param	int		$max_upload_date
+	 * @param	string	$min_taken_date
+	 * @param	string	$max_taken_date
+	 * @param	int		$privacy_filter
+	 * @param	string	$media
+	 * @param	string	$extras
+	 * @param	int		$page
+	 * @param	int		$per_page
+	 * @return	mixed
+	 */
 	public function photos_getNotInSet($min_upload_date = NULL, $max_upload_date = NULL, $min_taken_date = NULL, $max_taken_date = NULL, $privacy_filter = NULL, $media = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
 	{
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
 		return $this->request('flickr.photos.getNotInSet', array('min_upload_date' => $min_upload_date, 'max_upload_date' => $max_upload_date, 'min_taken_date' => $min_taken_date, 'max_taken_date' => $max_taken_date, 'privacy_filter' => $privacy_filter, 'media' => $media, 'extras' => $extras, 'per_page' => $per_page, 'page' => $page));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getPerms.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Permissions
+	 * 
+	 * Get permissions for a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getPerms.html
+	 * @param	int		$photo_id
+	 * @return	mixed
+	 */
 	public function photos_getPerms($photo_id)
 	{
 		return $this->request('flickr.photos.getPerms', array('photo_id' => $photo_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getRecent.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Recent
+	 * 
+	 * Returns a list of the latest public photos uploaded to flickr.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getRecent.html
+	 * @param	string	$extras
+	 * @param	int		$page
+	 * @param	int		$per_page
+	 * @return	mixed
+	 */
 	public function photos_getRecent($extras = NULL, $per_page = NULL, $page = NULL)
 	{
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
 		return $this->request('flickr.photos.getRecent', array('extras' => $extras, 'per_page' => $per_page, 'page' => $page));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getSizes.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Sizes
+	 * 
+	 * Returns the available sizes for a photo. The calling user must have 
+	 * permission to view the photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getSizes.html
+	 * @param	int		$photo_id
+	 * @return	mixed
+	 */
 	public function photos_getSizes($photo_id)
 	{
 		return $this->request('flickr.photos.getSizes', array('photo_id' => $photo_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.getUntagged.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Untagged
+	 * 
+	 * Returns a list of your photos with no tags.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getUntagged.html
+	 * @param	int		$min_upload_date
+	 * @param	int		$max_upload_date
+	 * @param	string	$min_taken_date
+	 * @param	string	$max_taken_date
+	 * @param	int		$privacy_filter
+	 * @param	string	$media
+	 * @param	string	$extras
+	 * @param	int		$page
+	 * @param	int		$per_page
+	 * @return	mixed
+	 */
 	public function photos_getUntagged($min_upload_date = NULL, $max_upload_date = NULL, $min_taken_date = NULL, $max_taken_date = NULL, $privacy_filter = NULL, $media = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
 	{
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
 		return $this->request('flickr.photos.getUntagged', array('min_upload_date' => $min_upload_date, 'max_upload_date' => $max_upload_date, 'min_taken_date' => $min_taken_date, 'max_taken_date' => $max_taken_date, 'privacy_filter' => $privacy_filter, 'media' => $media, 'extras' => $extras, 'per_page' => $per_page, 'page' => $page));
 	}
 	
-	/* See the documentation included with the photos_search() function.
-	 * I'm using the same style of arguments for this function. The only
-	 * difference here is that this doesn't require any arguments. The
-	 * flickr.photos.search method requires at least one search parameter.
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get With Geo Data
+	 * 
+	 * Returns a list of your geo-tagged photos.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getWithGeoData.html
+	 * @param	int		$min_upload_date
+	 * @param	int		$max_upload_date
+	 * @param	string	$min_taken_date
+	 * @param	string	$max_taken_date
+	 * @param	int		$privacy_filter
+	 * @param	string	$sort
+	 * @param	string	$media
+	 * @param	string	$extras
+	 * @param	int		$page
+	 * @param	int		$per_page
+	 * @return	mixed
 	 */
-	/* http://www.flickr.com/services/api/flickr.photos.getWithGeoData.html */
-	public function photos_getWithGeoData($args = array())
+	public function photos_getWithGeoData($min_upload_date = NULL, $max_upload_date = NULL, $min_taken_date = NULL, $max_taken_date = NULL, $privacy_filter = NULL, $sort = NULL, $media = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
 	{
-		return $this->request('flickr.photos.getWithGeoData', $args);
+		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
+		return $this->request('flickr.photos.getWithGeoData', array('min_upload_date' => $min_upload_date, 'max_upload_date' => $max_upload_date, 'min_taken_date' => $min_taken_date, 'max_taken_date' => $max_taken_date, 'privacy_filter' => $privacy_filter, 'sort' => $sort, 'media' => $media, 'extras' => $extras, 'per_page' => $per_page, 'page' => $page));
 	}
 	
-	/* See the documentation included with the photos_search() function.
-	 * I'm using the same style of arguments for this function. The only
-	 * difference here is that this doesn't require any arguments. The
-	 * flickr.photos.search method requires at least one search parameter.
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Get Without Geo Data
+	 * 
+	 * Returns a list of your photos which haven't been geo-tagged.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.getWithoutGeoData.html
+	 * @param	int		$min_upload_date
+	 * @param	int		$max_upload_date
+	 * @param	string	$min_taken_date
+	 * @param	string	$max_taken_date
+	 * @param	int		$privacy_filter
+	 * @param	string	$sort
+	 * @param	string	$media
+	 * @param	string	$extras
+	 * @param	int		$page
+	 * @param	int		$per_page
+	 * @return	mixed
 	 */
-	/* http://www.flickr.com/services/api/flickr.photos.getWithoutGeoData.html */
-	public function photos_getWithoutGeoData($args = array())
+	public function photos_getWithoutGeoData($min_upload_date = NULL, $max_upload_date = NULL, $min_taken_date = NULL, $max_taken_date = NULL, $privacy_filter = NULL, $sort = NULL, $media = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
 	{
-		return $this->request('flickr.photos.getWithoutGeoData', $args);
+		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
+		return $this->request('flickr.photos.getWithoutGeoData', array('min_upload_date' => $min_upload_date, 'max_upload_date' => $max_upload_date, 'min_taken_date' => $min_taken_date, 'max_taken_date' => $max_taken_date, 'privacy_filter' => $privacy_filter, 'sort' => $sort, 'media' => $media, 'extras' => $extras, 'per_page' => $per_page, 'page' => $page));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.recentlyUpdated.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Recently Updated
+	 * 
+	 * Return a list of your photos that have been recently created or which 
+	 * have been recently modified. Recently modified may mean that the photo's 
+	 * metadata (title, description, tags) may have been changed or a comment 
+	 * has been added (or just modified somehow :-)
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.recentlyUpdated.html
+	 * @param	int		$min_date
+	 * @param	string	$extras
+	 * @param	int		$page
+	 * @param	int		$per_page
+	 * @return	mixed
+	 */
 	public function photos_recentlyUpdated($min_date, $extras = NULL, $per_page = NULL, $page = NULL)
 	{
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
 		return $this->request('flickr.photos.recentlyUpdated', array('min_date' => $min_date, 'extras' => $extras, 'per_page' => $per_page, 'page' => $page));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.removeTag.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Remove Tag
+	 * 
+	 * Remove a tag from a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.removeTag.html
+	 * @param	int		$tag_id
+	 * @return	mixed
+	 */
 	public function photos_removeTag($tag_id)
 	{
 		return $this->request('flickr.photos.removeTag', array('tag_id' => $tag_id), TRUE);
 	}
 	
-	/* This function strays from the method of arguments that I've
-	 * used in the other functions for the fact that there are just
-	 * so many arguments to this API method. What you'll need to do
-	 * is pass an associative array to the function containing the
-	 * arguments you want to pass to the API.  For example:
-	 *   $photos = $f->photos_search(array('tags' => 'brown,cow', 'tag_mode' => 'any'));
-	 * This will return photos tagged with either 'brown' or 'cow'
-	 * or both. See the API documentation (link below) for a full
-	 * list of arguments.
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Search
+	 * 
+	 * Return a list of photos matching some criteria. Only photos visible to 
+	 * the calling user will be returned. To return private or semi-private 
+	 * photos, the caller must be authenticated with 'read' permissions, and 
+	 * have permission to view the photos. Unauthenticated calls will only 
+	 * return public photos.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.search.html
+	 * @param	array		$args
+	 * @return	mixed
 	 */
-	/* http://www.flickr.com/services/api/flickr.photos.search.html */
 	public function photos_search($args = array())
 	{
 		return $this->request('flickr.photos.search', $args);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.setContentType.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Set Content Type
+	 * 
+	 * Set the content type of a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.setContentType.html
+	 * @param	int		$photo_id
+	 * @param	int		$content_type
+	 * @return	mixed
+	 */
 	public function photos_setContentType($photo_id, $content_type)
 	{
 		return $this->request('flickr.photos.setContentType', array('photo_id' => $photo_id, 'content_type' => $content_type));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.setDates.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Set Dates
+	 * 
+	 * Set one or both of the dates for a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.setDates.html
+	 * @param	int		$photo_id
+	 * @param	int		$date_posted
+	 * @param	string	$date_taken
+	 * @param	int		$date_taken_granularity
+	 * @return	mixed
+	 */
 	public function photos_setDates($photo_id, $date_posted = NULL, $date_taken = NULL, $date_taken_granularity = NULL)
 	{
 		return $this->request('flickr.photos.setDates', array('photo_id' => $photo_id, 'date_posted' => $date_posted, 'date_taken' => $date_taken, 'date_taken_granularity' => $date_taken_granularity), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.setMeta.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Set Meta
+	 * 
+	 * Set the meta information for a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.setMeta.html
+	 * @param	int		$photo_id
+	 * @param	string	$title
+	 * @param	string	$description
+	 * @return	mixed
+	 */
 	public function photos_setMeta($photo_id, $title, $description)
 	{
 		return $this->request('flickr.photos.setMeta', array('photo_id' => $photo_id, 'title' => $title, 'description' => $description), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.setPerms.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Set Permissions
+	 * 
+	 * Set permissions for a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.setPerms.html
+	 * @param	int		$photo_id
+	 * @param	int		$is_public
+	 * @param	int		$is_friend
+	 * @param	int		$is_family
+	 * @param	int		$perm_comment
+	 * @param	int		$perm_addmeta
+	 * @return	mixed
+	 */
 	public function photos_setPerms($photo_id, $is_public, $is_friend, $is_family, $perm_comment, $perm_addmeta)
 	{
 		return $this->request('flickr.photos.setPerms', array('photo_id' => $photo_id, 'is_public' => $is_public, 'is_friend' => $is_friend, 'is_family' => $is_family, 'perm_comment' => $perm_comment, 'perm_addmeta' => $perm_addmeta), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.setSafetyLevel.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Set Safety Level
+	 * 
+	 * Set the safety level of a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.setSafetyLevel.html
+	 * @param	int		$photo_id
+	 * @param	int		$safety_level
+	 * @param	int		$hidden
+	 * @return	mixed
+	 */
 	public function photos_setSafetyLevel($photo_id, $safety_level = NULL, $hidden = NULL)
 	{
 		return $this->request('flickr.photos.setSafetyLevel', array('photo_id' => $photo_id, 'safety_level' => $safety_level, 'hidden' => $hidden));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.setTags.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Set Tags
+	 * 
+	 * Set the tags for a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.setTags.html
+	 * @param	int		$photo_id
+	 * @param	string	$safety_level
+	 * @return	mixed
+	 */
 	public function photos_setTags($photo_id, $tags)
 	{
 		return $this->request('flickr.photos.setTags', array('photo_id' => $photo_id, 'tags' => $tags), TRUE);
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Photos - Comments Methods */
-	/* http://www.flickr.com/services/api/flickr.photos.comments.addComment.html */
+	/**
+	 * Photos Comments Add Comment
+	 * 
+	 * Add comment to a photo as the currently authenticated user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.comments.addComment.html
+	 * @param	int		$photo_id
+	 * @param	string	$comment_text
+	 * @return	mixed
+	 */
 	public function photos_comments_addComment($photo_id, $comment_text)
 	{
 		return $this->request('flickr.photos.comments.addComment', array('photo_id' => $photo_id, 'comment_text' => $comment_text), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.comments.deleteComment.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Comments Delete Comment
+	 * 
+	 * Delete a comment as the currently authenticated user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.comments.deleteComment.html
+	 * @param	int		$comment_id
+	 * @return	mixed
+	 */
 	public function photos_comments_deleteComment($comment_id)
 	{
 		return $this->request('flickr.photos.comments.deleteComment', array('comment_id' => $comment_id), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.comments.editComment.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Comments Edit Comment
+	 * 
+	 * Edit the text of a comment as the currently authenticated user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.comments.editComment.html
+	 * @param	int		$comment_id
+	 * @param	string	$comment_text
+	 * @return	mixed
+	 */
 	public function photos_comments_editComment($comment_id, $comment_text)
 	{
 		return $this->request('flickr.photos.comments.editComment', array('comment_id' => $comment_id, 'comment_text' => $comment_text), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.comments.getList.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Comments Get List
+	 * 
+	 * Returns the comments for a photo
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.comments.getList.html
+	 * @param	int		$photo_id
+	 * @param	int		$min_comment_date
+	 * @param	int		$max_comment_date
+	 * @return	mixed
+	 */
 	public function photos_comments_getList($photo_id, $min_comment_date = NULL, $max_comment_date = NULL)
 	{
 		return $this->request('flickr.photos.comments.getList', array('photo_id' => $photo_id, 'min_comment_date' => $min_comment_date, 'max_comment_date' => $max_comment_date));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.comments.getRecentForContacts.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Comments Get Recent For Contacts
+	 * 
+	 * Return the list of photos belonging to your contacts that have been 
+	 * commented on recently.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.comments.getRecentForContacts.html
+	 * @param	int		$date_lastcomment
+	 * @param	string	$contacts_filter
+	 * @param	string	$extras
+	 * @param	int		$per_page
+	 * @param	int		$page
+	 * @return	mixed
+	 */
 	public function photos_comments_getRecentForContacts($date_lastcomment = NULL, $contacts_filter = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
 	{
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
 		return $this->request('flickr.photos.comments.getRecentForContacts', array('date_lastcomment' => $date_lastcomment, 'contacts_filter' => $contacts_filter, 'extras' => $extras, 'per_page' => $per_page, 'page' => $page));
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Photos - Geo Methods */
-	/* http://www.flickr.com/services/api/flickr.photos.geo.batchCorrectLocation.html */
+	/**
+	 * Photos Geo Batch Correct Location
+	 * 
+	 * Correct the places hierarchy for all the photos for a user at a given 
+	 * latitude, longitude and accuracy.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.geo.batchCorrectLocation.html
+	 * @param	int		$lat
+	 * @param	int		$lon
+	 * @param	int		$accuracy
+	 * @param	int		$place_id
+	 * @param	int		$woe_id
+	 * @return	mixed
+	 */
 	public function photos_geo_batchCorrectLocation($lat, $lon, $accuracy, $place_id = NULL, $woe_id = NULL)
 	{
 		return $this->request('flickr.photos.geo.batchCorrectLocation', array('lat' => $lat, 'lon' => $lon, 'accuracy' => $accuracy, 'place_id' => $place_id, 'woe_id' => $woe_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.geo.correctLocation.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Geo Correct Location
+	 * 
+	 * Correct the location of a photo
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.geo.correctLocation.html
+	 * @param	int		$photo_id
+	 * @param	int		$place_id
+	 * @param	int		$woe_id
+	 * @return	mixed
+	 */
 	public function photos_geo_correctLocation($photo_id, $place_id = NULL, $woe_id = NULL)
 	{
 		return $this->request('flickr.photos.geo.correctLocation', array('photo_id' => $photo_id, 'place_id' => $place_id, 'woe_id' => $woe_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.geo.getLocation.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Geo Get Location
+	 * 
+	 * Get the geo data (latitude and longitude and the accuracy level) for a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.geo.getLocation.html
+	 * @param	int		$photo_id
+	 * @return	mixed
+	 */
 	public function photos_geo_getLocation($photo_id)
 	{
 		return $this->request('flickr.photos.geo.getLocation', array('photo_id' => $photo_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.geo.getPerms.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Geo Get Permissions
+	 * 
+	 * Get permissions for who may view geo data for a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.geo.getPerms.html
+	 * @param	int		$photo_id
+	 * @return	mixed
+	 */
 	public function photos_geo_getPerms($photo_id)
 	{
 		return $this->request('flickr.photos.geo.getPerms', array('photo_id' => $photo_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.geo.photosForLocation.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Geo Photos For Location
+	 * 
+	 * Return a list of photos for a user at a specific latitude, longitude 
+	 * and accuracy
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.geo.photosForLocation.html
+	 * @param	int		$lat
+	 * @param	int		$lon
+	 * @param	int		$accuracy
+	 * @param	string	$extras
+	 * @param	int		$per_page
+	 * @param	int		$page
+	 * @return	mixed
+	 */
 	public function photos_geo_photosForLocation($lat, $lon, $accuracy = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
 	{
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
 		return $this->request('flickr.photos.geo.photosForLocation', array('lat' => $lat, 'lon' => $lon, 'accuracy' => $accuracy, 'extras' => $extras, 'per_page' => $per_page, 'page' => $page));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.geo.removeLocation.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Geo Remove Location
+	 * 
+	 * Removes the geo data associated with a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.geo.removeLocation.html
+	 * @param	int		$photo_id
+	 * @return	mixed
+	 */
 	public function photos_geo_removeLocation($photo_id)
 	{
 		return $this->request('flickr.photos.geo.removeLocation', array('photo_id' => $photo_id), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.geo.setContext.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Geo Set Context
+	 * 
+	 * Indicate the state of a photo's geotagginess beyond latitude and longitude.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.geo.setContext.html
+	 * @param	int		$photo_id
+	 * @param	int		$context
+	 * @return	mixed
+	 */
 	public function photos_geo_setContext($photo_id, $context)
 	{
 		return $this->request('flickr.photos.geo.setContext', array('photo_id' => $photo_id, 'context' => $context));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.geo.setLocation.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Geo Set Location
+	 * 
+	 * Sets the geo data (latitude and longitude and, optionally, the accuracy 
+	 * level) for a photo. Before users may assign location data to a photo they 
+	 * must define who, by default, may view that information. Users can edit 
+	 * this preference at http://www.flickr.com/account/geo/privacy/. If a user 
+	 * has not set this preference, the API method will return an error.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.geo.setLocation.html
+	 * @param	int		$photo_id
+	 * @param	int		$lat
+	 * @param	int		$lon
+	 * @param	int		$accuracy
+	 * @param	int		$context
+	 * @return	mixed
+	 */
 	public function photos_geo_setLocation($photo_id, $lat, $lon, $accuracy = NULL, $context = NULL)
 	{
 		return $this->request('flickr.photos.geo.setLocation', array('photo_id' => $photo_id, 'lat' => $lat, 'lon' => $lon, 'accuracy' => $accuracy, 'context' => $context), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.geo.setPerms.html */
-	public function photos_geo_setPerms($is_public, $is_contact, $is_friend, $is_family, $photo_id)
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Geo Set Permissions
+	 * 
+	 * Set the permission for who may view the geo data associated with a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.geo.setPerms.html
+	 * @param	int		$photo_id
+	 * @param	int		$is_public
+	 * @param	int		$is_contact
+	 * @param	int		$is_friend
+	 * @param	int		$is_family
+	 * @return	mixed
+	 */
+	public function photos_geo_setPerms($photo_id, $is_public, $is_contact, $is_friend, $is_family)
 	{
 		return $this->request('flickr.photos.geo.setPerms', array('is_public' => $is_public, 'is_contact' => $is_contact, 'is_friend' => $is_friend, 'is_family' => $is_family, 'photo_id' => $photo_id));
 	}
 	
-	/* Photos - Licenses Methods */
-	/* http://www.flickr.com/services/api/flickr.photos.licenses.getInfo.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Licenses Get Info
+	 * 
+	 * Fetches a list of available photo licenses for Flickr.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.licenses.getInfo.html
+	 * @return	mixed
+	 */
 	public function photos_licenses_getInfo()
 	{
 		return $this->request('flickr.photos.licenses.getInfo');
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.licenses.setLicense.html */
-	/* Requires Authentication */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Licenses Set License
+	 * 
+	 * Sets the license for a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.licenses.setLicense.html
+	 * @param	int		$photo_id
+	 * @param	int		$license_id
+	 * @return	mixed
+	 */
 	public function photos_licenses_setLicense($photo_id, $license_id)
 	{
 		return $this->request('flickr.photos.licenses.setLicense', array('photo_id' => $photo_id, 'license_id' => $license_id), TRUE);
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Photos - Notes Methods */
-	/* http://www.flickr.com/services/api/flickr.photos.notes.add.html */
+	/**
+	 * Photos Notes Add
+	 * 
+	 * Add a note to a photo. Coordinates and sizes are in pixels, based on the 
+	 * 500px image size shown on individual photo pages.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.notes.add.html
+	 * @param	int		$photo_id
+	 * @param	int		$note_x
+	 * @param	int		$note_y
+	 * @param	int		$note_w
+	 * @param	int		$note_h
+	 * @param	string	$note_text
+	 * @return	mixed
+	 */
 	public function photos_notes_add($photo_id, $note_x, $note_y, $note_w, $note_h, $note_text)
 	{
 		return $this->request('flickr.photos.notes.add', array('photo_id' => $photo_id, 'note_x' => $note_x, 'note_y' => $note_y, 'note_w' => $note_w, 'note_h' => $note_h, 'note_text' => $note_text), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.notes.delete.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Notes Delete
+	 * 
+	 * Delete a note from a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.notes.delete.html
+	 * @param	int		$note_id
+	 * @return	mixed
+	 */
 	public function photos_notes_delete($note_id)
 	{
 		return $this->request('flickr.photos.notes.delete', array('note_id' => $note_id), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.notes.edit.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photos Notes Edit
+	 * 
+	 * Edit a note on a photo. Coordinates and sizes are in pixels, based on 
+	 * the 500px image size shown on individual photo pages.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.notes.edit.html
+	 * @param	int		$note_id
+	 * @param	int		$note_x
+	 * @param	int		$note_y
+	 * @param	int		$note_w
+	 * @param	int		$note_h
+	 * @param	string	$note_text
+	 * @return	mixed
+	 */
 	public function photos_notes_edit($note_id, $note_x, $note_y, $note_w, $note_h, $note_text)
 	{
 		return $this->request('flickr.photos.notes.edit', array('note_id' => $note_id, 'note_x' => $note_x, 'note_y' => $note_y, 'note_w' => $note_w, 'note_h' => $note_h, 'note_text' => $note_text), TRUE);
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Photos - Transform Methods */
-	/* http://www.flickr.com/services/api/flickr.photos.transform.rotate.html */
+	/**
+	 * Photos Transform Rotate
+	 * 
+	 * Rotate a photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.transform.rotate.html
+	 * @param	int		$photo_id
+	 * @param	int		$degrees
+	 * @return	mixed
+	 */
 	public function photos_transform_rotate($photo_id, $degrees)
 	{
 		return $this->request('flickr.photos.transform.rotate', array('photo_id' => $photo_id, 'degrees' => $degrees), TRUE);
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Photos - Upload Methods */
-	/* http://www.flickr.com/services/api/flickr.photos.upload.checkTickets.html */
+	/**
+	 * Photos Upload Check Tickets
+	 * 
+	 * Checks the status of one or more asynchronous photo upload tickets.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photos.upload.checkTickets.html
+	 * @param	string	$tickets
+	 * @return	mixed
+	 */
 	public function photos_upload_checkTickets($tickets)
 	{
-		if (is_array($tickets)) {
-			$tickets = implode(',', $tickets);
-		}
+		$tickets = is_array($tickets) && !empty($tickets) ? implode(',', $tickets) : $tickets;
 		return $this->request('flickr.photos.upload.checkTickets', array('tickets' => $tickets), TRUE);
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Photosets Methods */
-	/* http://www.flickr.com/services/api/flickr.photosets.addPhoto.html */
+	/**
+	 * Photosets Add Photo
+	 * 
+	 * Add a photo to the end of an existing photoset.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.addPhoto.html
+	 * @param	int		$photoset_id
+	 * @param	int		$photo_id
+	 * @return	mixed
+	 */
 	public function photosets_addPhoto($photoset_id, $photo_id)
 	{
 		return $this->request('flickr.photosets.addPhoto', array('photoset_id' => $photoset_id, 'photo_id' => $photo_id), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.create.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Create
+	 * 
+	 * Create a new photoset for the calling user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.create.html
+	 * @param	string	$title
+	 * @param	string	$description
+	 * @param	int		$primary_photo_id
+	 * @return	mixed
+	 */
 	public function photosets_create($title, $description, $primary_photo_id)
 	{
 		return $this->request('flickr.photosets.create', array('title' => $title, 'primary_photo_id' => $primary_photo_id, 'description' => $description), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.delete.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Delete
+	 * 
+	 * Delete a photoset.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.delete.html
+	 * @param	int		$photoset_id
+	 * @return	mixed
+	 */
 	public function photosets_delete($photoset_id)
 	{
 		return $this->request('flickr.photosets.delete', array('photoset_id' => $photoset_id), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.editMeta.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Edit Meta
+	 * 
+	 * Modify the meta-data for a photoset.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.editMeta.html
+	 * @param	int		$photoset_id
+	 * @param	string	$title
+	 * @param	string	$description
+	 * @return	mixed
+	 */
 	public function photosets_editMeta($photoset_id, $title, $description = NULL)
 	{
 		return $this->request('flickr.photosets.editMeta', array('photoset_id' => $photoset_id, 'title' => $title, 'description' => $description), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.editPhotos.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Edit Photos
+	 * 
+	 * Modify the photos in a photoset. Use this method to add, remove and 
+	 * re-order photos.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.editPhotos.html
+	 * @param	int		$photoset_id
+	 * @param	int		$primary_photo_id
+	 * @param	string	$photo_ids
+	 * @return	mixed
+	 */
 	public function photosets_editPhotos($photoset_id, $primary_photo_id, $photo_ids)
 	{
 		return $this->request('flickr.photosets.editPhotos', array('photoset_id' => $photoset_id, 'primary_photo_id' => $primary_photo_id, 'photo_ids' => $photo_ids), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.getContext.html */
-	public function photosets_getContext($photo_id, $photoset_id)
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Get Context
+	 * 
+	 * Returns next and previous photos for a photo in a set.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.getContext.html
+	 * @param	int		$photoset_id
+	 * @param	int		$photo_id
+	 * @return	mixed
+	 */
+	public function photosets_getContext($photoset_id, $photo_id)
 	{
 		return $this->request('flickr.photosets.getContext', array('photo_id' => $photo_id, 'photoset_id' => $photoset_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.getInfo.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Get Info
+	 * 
+	 * Gets information about a photoset.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.getInfo.html
+	 * @param	int		$photoset_id
+	 * @return	mixed
+	 */
 	public function photosets_getInfo($photoset_id)
 	{
 		return $this->request('flickr.photosets.getInfo', array('photoset_id' => $photoset_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.getList.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Get List
+	 * 
+	 * Returns the photosets belonging to the specified user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.getList.html
+	 * @param	string	$user_id
+	 * @return	mixed
+	 */
 	public function photosets_getList($user_id = NULL)
 	{
 		return $this->request('flickr.photosets.getList', array('user_id' => $user_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.getPhotos.html */
-	public function photosets_getPhotos($photoset_id, $extras = NULL, $privacy_filter = NULL, $per_page = NULL, $page = NULL, $media = NULL)
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Get Photos
+	 * 
+	 * Get the list of photos in a set.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.getPhotos.html
+	 * @param	int		$photoset_id
+	 * @param	int		$privacy_filter
+	 * @param	string	$media
+	 * @param	string	$extras
+	 * @param	int		$per_page
+	 * @param	int		$page
+	 * @return	mixed
+	 */
+	public function photosets_getPhotos($photoset_id, $privacy_filter = NULL, $media = NULL, $extras = NULL, $per_page = NULL, $page = NULL)
 	{
 		$extras = is_array($extras) && !empty($extras) ? implode(',', $extras) : $extras;
 		return $this->request('flickr.photosets.getPhotos', array('photoset_id' => $photoset_id, 'extras' => $extras, 'privacy_filter' => $privacy_filter, 'per_page' => $per_page, 'page' => $page, 'media' => $media));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.orderSets.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Order Sets
+	 * 
+	 * Set the order of photosets for the calling user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.orderSets.html
+	 * @param	string	$photoset_ids
+	 * @return	mixed
+	 */
 	public function photosets_orderSets($photoset_ids)
 	{
-		if (is_array($photoset_ids)) {
-			$photoset_ids = implode(',', $photoset_ids);
-		}
+		$photoset_ids = is_array($photoset_ids) && !empty($photoset_ids) ? implode(',', $photoset_ids) : $photoset_ids;
 		return $this->request('flickr.photosets.orderSets', array('photoset_ids' => $photoset_ids), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.removePhoto.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Remove Photo
+	 * 
+	 * Remove a photo from a photoset.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.removePhoto.html
+	 * @param	int		$photoset_id
+	 * @param	int		$photo_id
+	 * @return	mixed
+	 */
 	public function photosets_removePhoto($photoset_id, $photo_id)
 	{
 		return $this->request('flickr.photosets.removePhoto', array('photoset_id' => $photoset_id, 'photo_id' => $photo_id), TRUE);
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Photosets Comments Methods */
-	/* http://www.flickr.com/services/api/flickr.photosets.comments.addComment.html */
+	/**
+	 * Photosets Comments Add Comment
+	 * 
+	 * Add a comment to a photoset.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.comments.addComment.html
+	 * @param	int		$photoset_id
+	 * @param	string	$comment_text
+	 * @return	mixed
+	 */
 	public function photosets_comments_addComment($photoset_id, $comment_text)
 	{
 		return $this->request('flickr.photosets.comments.addComment', array('photoset_id' => $photoset_id, 'comment_text' => $comment_text), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.comments.deleteComment.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Comments Delete Comment
+	 * 
+	 * Delete a photoset comment as the currently authenticated user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.comments.deleteComment.html
+	 * @param	int		$comment_id
+	 * @return	mixed
+	 */
 	public function photosets_comments_deleteComment($comment_id)
 	{
 		return $this->request('flickr.photosets.comments.deleteComment', array('comment_id' => $comment_id), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.comments.editComment.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Comments Edit Comment
+	 * 
+	 * Edit the text of a comment as the currently authenticated user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.comments.editComment.html
+	 * @param	int		$comment_id
+	 * @param	string	$comment_text
+	 * @return	mixed
+	 */
 	public function photosets_comments_editComment($comment_id, $comment_text)
 	{
 		return $this->request('flickr.photosets.comments.editComment', array('comment_id' => $comment_id, 'comment_text' => $comment_text), TRUE);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photosets.comments.getList.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Photosets Comments Get List
+	 * 
+	 * Returns the comments for a photoset.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.photosets.comments.getList.html
+	 * @param	int		$photoset_id
+	 * @return	mixed
+	 */
 	public function photosets_comments_getList($photoset_id)
 	{
 		return $this->request('flickr.photosets.comments.getList', array('photoset_id' => $photoset_id));
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Places Methods */
-	/* http://www.flickr.com/services/api/flickr.places.find.html */
+	/**
+	 * Places Find
+	 * 
+	 * Return a list of place IDs for a query string. The flickr.places.find 
+	 * method is not a geocoder. It will round "up" to the nearest place type to 
+	 * which place IDs apply. For example, if you pass it a street level address 
+	 * it will return the city that contains the address rather than the 
+	 * street, or building, itself.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.find.html
+	 * @param	string	$query
+	 * @return	mixed
+	 */
 	public function places_find($query)
 	{
 		return $this->request('flickr.places.find', array('query' => $query));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.findByLatLon.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places Find By Latitude and Longitude
+	 * 
+	 * Return a place ID for a latitude, longitude and accuracy triple.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.findByLatLon.html
+	 * @param	int		$lat
+	 * @param	int		$lon
+	 * @param	int		$accuracy
+	 * @return	mixed
+	 */
 	public function places_findByLatLon($lat, $lon, $accuracy = NULL)
 	{
 		return $this->request('flickr.places.findByLatLon', array('lat' => $lat, 'lon' => $lon, 'accuracy' => $accuracy));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.getChildrenWithPhotosPublic.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places Get Children With Photos Public
+	 * 
+	 * Return a list of locations with public photos that are parented by a 
+	 * Where on Earth (WOE) or Places ID.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.getChildrenWithPhotosPublic.html
+	 * @param	string	$place_id
+	 * @param	int		$woe_id
+	 * @return	mixed
+	 */
 	public function places_getChildrenWithPhotosPublic($place_id = NULL, $woe_id = NULL)
 	{
 		return $this->request('flickr.places.getChildrenWithPhotosPublic', array('place_id' => $place_id, 'woe_id' => $woe_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.getInfo.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places Get Info
+	 * 
+	 * Get informations about a place.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.getInfo.html
+	 * @param	string	$place_id
+	 * @param	int		$woe_id
+	 * @return	mixed
+	 */
 	public function places_getInfo($place_id = NULL, $woe_id = NULL)
 	{
 		return $this->request('flickr.places.getInfo', array('place_id' => $place_id, 'woe_id' => $woe_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.getInfoByUrl.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places Get Info By Url
+	 * 
+	 * Lookup information about a place, by its flickr.com/places URL.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.getInfoByUrl.html
+	 * @param	string	$url
+	 * @return	mixed
+	 */
 	public function places_getInfoByUrl($url)
 	{
 		return $this->request('flickr.places.getInfoByUrl', array('url' => $url));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.getPlaceTypes.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places Get Place Types
+	 * 
+	 * Fetches a list of available place types for Flickr.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.getPlaceTypes.html
+	 * @return	mixed
+	 */
 	public function places_getPlaceTypes()
 	{
 		return $this->request('flickr.places.getPlaceTypes', array());
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.getShapeHistory.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places Get Shape History
+	 * 
+	 * Return an historical list of all the shape data generated for a Places 
+	 * or Where on Earth (WOE) ID.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.getShapeHistory.html
+	 * @param	string	$place_id
+	 * @param	int		$woe_id
+	 * @return	mixed
+	 */
 	public function places_getShapeHistory($place_id = NULL, $woe_id = NULL)
 	{
 		return $this->request('flickr.places.getShapeHistory', array('place_id' => $place_id, 'woe_id' => $woe_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.getTopPlacesList.html */
-	public function places_getTopPlacesList($place_type_id, $date = NULL, $woe_id = NULL, $place_id = NULL)
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places Get Top Places List
+	 * 
+	 * Return the top 100 most geotagged places for a day.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.getTopPlacesList.html
+	 * @param	int		$place_type_id
+	 * @param	string	$date
+	 * @param	string	$place_id
+	 * @param	int		$woe_id
+	 * @return	mixed
+	 */
+	public function places_getTopPlacesList($place_type_id, $date = NULL, $place_id = NULL, $woe_id = NULL)
 	{
 		return $this->request('flickr.places.getTopPlacesList', array('place_type_id' => $place_type_id, 'date' => $date, 'woe_id' => $woe_id, 'place_id' => $place_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.placesForBoundingBox.html */
-	public function places_placesForBoundingBox($bbox, $place_type = NULL, $place_type_id = NULL)
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places For Bounding Box
+	 * 
+	 * Return all the locations of a matching place type for a bounding box.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.placesForBoundingBox.html
+	 * @param	string	$bbox
+	 * @param	int		$place_type_id
+	 * @return	mixed
+	 */
+	public function places_placesForBoundingBox($bbox, $place_type_id = NULL)
 	{
-		return $this->request('flickr.places.placesForBoundingBox', array('bbox' => $bbox, 'place_type' => $place_type, 'place_type_id' => $place_type_id));
+		return $this->request('flickr.places.placesForBoundingBox', array('bbox' => $bbox, 'place_type_id' => $place_type_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.placesForContacts.html */
-	public function places_placesForContacts($place_type = NULL, $place_type_id = NULL, $woe_id = NULL, $place_id = NULL, $threshold = NULL, $contacts = NULL, $min_upload_date = NULL, $max_upload_date = NULL, $min_taken_date = NULL, $max_taken_date = NULL)
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places For Contacts
+	 * 
+	 * Return a list of the top 100 unique places clustered by a given 
+	 * placetype for a user's contacts.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.placesForContacts.html
+	 * @param	int		$place_type_id
+	 * @param	int		$woe_id
+	 * @param	string	$place_id
+	 * @param	int		$threshold
+	 * @param	string	$contacts
+	 * @param	int		$min_upload_date
+	 * @param	int		$max_upload_date
+	 * @param	string	$min_taken_date
+	 * @param	string	$max_taken_date
+	 * @return	mixed
+	 */
+	public function places_placesForContacts($place_type_id = NULL, $woe_id = NULL, $place_id = NULL, $threshold = NULL, $contacts = NULL, $min_upload_date = NULL, $max_upload_date = NULL, $min_taken_date = NULL, $max_taken_date = NULL)
 	{
-		return $this->request('flickr.places.placesForContacts', array('place_type' => $place_type, 'place_type_id' => $place_type_id, 'woe_id' => $woe_id, 'place_id' => $place_id, 'threshold' => $threshold, 'contacts' => $contacts, 'min_upload_date' => $min_upload_date, 'max_upload_date' => $max_upload_date, 'min_taken_date' => $min_taken_date, 'max_taken_date' => $max_taken_date));
+		return $this->request('flickr.places.placesForContacts', array('place_type_id' => $place_type_id, 'woe_id' => $woe_id, 'place_id' => $place_id, 'threshold' => $threshold, 'contacts' => $contacts, 'min_upload_date' => $min_upload_date, 'max_upload_date' => $max_upload_date, 'min_taken_date' => $min_taken_date, 'max_taken_date' => $max_taken_date));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.placesForTags.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places For Tags
+	 * 
+	 * Return a list of the top 100 unique places clustered by a given 
+	 * placetype for set of tags or machine tags.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.placesForTags.html
+	 * @param	int		$place_type_id
+	 * @param	int		$woe_id
+	 * @param	string	$place_id
+	 * @param	int		$threshold
+	 * @param	string	$tags
+	 * @param	string	$tag_mode
+	 * @param	string	$machine_tags
+	 * @param	string	$machine_tag_mode
+	 * @param	int		$min_upload_date
+	 * @param	int		$max_upload_date
+	 * @param	string	$min_taken_date
+	 * @param	string	$max_taken_date
+	 * @return	mixed
+	 */
 	public function places_placesForTags($place_type_id, $woe_id = NULL, $place_id = NULL, $threshold = NULL, $tags = NULL, $tag_mode = NULL, $machine_tags = NULL, $machine_tag_mode = NULL, $min_upload_date = NULL, $max_upload_date = NULL, $min_taken_date = NULL, $max_taken_date = NULL)
 	{
 		return $this->request('flickr.places.placesForTags', array('place_type_id' => $place_type_id, 'woe_id' => $woe_id, 'place_id' => $place_id, 'threshold' => $threshold, 'tags' => $tags, 'tag_mode' => $tag_mode, 'machine_tags' => $machine_tags, 'machine_tag_mode' => $machine_tag_mode, 'min_upload_date' => $min_upload_date, 'max_upload_date' => $max_upload_date, 'min_taken_date' => $min_taken_date, 'max_taken_date' => $max_taken_date));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.placesForUser.html */
-	public function places_placesForUser($place_type_id = NULL, $place_type = NULL, $woe_id = NULL, $place_id = NULL, $threshold = NULL, $min_upload_date = NULL, $max_upload_date = NULL, $min_taken_date = NULL, $max_taken_date = NULL)
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Places For User
+	 * 
+	 * Return a list of the top 100 unique places clustered by a given 
+	 * placetype for a user. 
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.placesForUser.html
+	 * @param	int		$place_type_id
+	 * @param	int		$woe_id
+	 * @param	string	$place_id
+	 * @param	int		$threshold
+	 * @param	int		$min_upload_date
+	 * @param	int		$max_upload_date
+	 * @param	string	$min_taken_date
+	 * @param	string	$max_taken_date
+	 * @return	mixed
+	 */
+	public function places_placesForUser($place_type_id = NULL, $woe_id = NULL, $place_id = NULL, $threshold = NULL, $min_upload_date = NULL, $max_upload_date = NULL, $min_taken_date = NULL, $max_taken_date = NULL)
 	{
-		return $this->request('flickr.places.placesForUser', array('place_type_id' => $place_type_id, 'place_type' => $place_type, 'woe_id' => $woe_id, 'place_id' => $place_id, 'threshold' => $threshold, 'min_upload_date' => $min_upload_date, 'max_upload_date' => $max_upload_date, 'min_taken_date' => $min_taken_date, 'max_taken_date' => $max_taken_date));
+		return $this->request('flickr.places.placesForUser', array('place_type_id' => $place_type_id, 'woe_id' => $woe_id, 'place_id' => $place_id, 'threshold' => $threshold, 'min_upload_date' => $min_upload_date, 'max_upload_date' => $max_upload_date, 'min_taken_date' => $min_taken_date, 'max_taken_date' => $max_taken_date));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.places.resolvePlaceId.html */
-	public function places_resolvePlaceId($place_id)
-	{
-		return $this->request('flickr.places.resolvePlaceId', array('place_id' => $place_id));
-	}
+	// --------------------------------------------------------------------------
 	
-	/* http://www.flickr.com/services/api/flickr.places.resolvePlaceURL.html */
-	public function places_resolvePlaceURL($url)
-	{
-		return $this->request('flickr.places.resolvePlaceURL', array('url' => $url));
-	}
-	
-	/* http://www.flickr.com/services/api/flickr.places.tagsForPlace.html */
+	/**
+	 * Places Tags For Place
+	 * 
+	 * Return a list of the top 100 unique tags for a Flickr Places 
+	 * or Where on Earth (WOE) ID
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.places.tagsForPlace.html
+	 * @param	int		$woe_id
+	 * @param	string	$place_id
+	 * @param	int		$min_upload_date
+	 * @param	int		$max_upload_date
+	 * @param	string	$min_taken_date
+	 * @param	string	$max_taken_date
+	 * @return	mixed
+	 */
 	function places_tagsForPlace($woe_id = NULL, $place_id = NULL, $min_upload_date = NULL, $max_upload_date = NULL, $min_taken_date = NULL, $max_taken_date = NULL)
 	{
 		return $this->request('flickr.places.tagsForPlace', array('woe_id' => $woe_id, 'place_id' => $place_id, 'min_upload_date' => $min_upload_date, 'max_upload_date' => $max_upload_date, 'min_taken_date' => $min_taken_date, 'max_taken_date' => $max_taken_date));
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Prefs Methods */
-	/* http://www.flickr.com/services/api/flickr.prefs.getContentType.html */
+	/**
+	 * Preferences Get Content Type
+	 * 
+	 * Returns the default content type preference for the user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.prefs.getContentType.html
+	 * @return	mixed
+	 */
 	public function prefs_getContentType()
 	{
 		return $this->request('flickr.prefs.getContentType');
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.prefs.getGeoPerms.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Preferences Get Geo Permissions
+	 * 
+	 * Returns the default privacy level for geographic information attached 
+	 * to the user's photos and whether or not the user has chosen to use 
+	 * geo-related EXIF information to automatically geotag their photos.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.prefs.getGeoPerms.html
+	 * @return	mixed
+	 */
 	public function prefs_getGeoPerms()
 	{
 		return $this->request('flickr.prefs.getGeoPerms');
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.prefs.getHidden.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Preferences Get Hidden
+	 * 
+	 * Returns the default hidden preference for the user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.prefs.getHidden.html
+	 * @return	mixed
+	 */
 	public function prefs_getHidden()
 	{
 		return $this->request('flickr.prefs.getHidden');
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.prefs.getPrivacy.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Preferences Get Privacy
+	 * 
+	 * Returns the default privacy level preference for the user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.prefs.getPrivacy.html
+	 * @return	mixed
+	 */
 	public function prefs_getPrivacy()
 	{
 		return $this->request('flickr.prefs.getPrivacy');
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.prefs.getSafetyLevel.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Preferences Get Safety Level
+	 * 
+	 * Returns the default safety level preference for the user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.prefs.getSafetyLevel.html
+	 * @return	mixed
+	 */
 	public function prefs_getSafetyLevel()
 	{
 		return $this->request('flickr.prefs.getSafetyLevel');
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Reflection Methods */
-	/* http://www.flickr.com/services/api/flickr.reflection.getMethodInfo.html */
+	/**
+	 * Reflection Get Method Info
+	 * 
+	 * Returns information for a given flickr API method.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.reflection.getMethodInfo.html
+	 * @param	string	$method_name
+	 * @return	mixed
+	 */
 	public function reflection_getMethodInfo($method_name)
 	{
 		return $this->request('flickr.reflection.getMethodInfo', array('method_name' => $method_name));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.reflection.getMethods.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Reflection Get Methods
+	 * 
+	 * Returns a list of available flickr API methods.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.reflection.getMethods.html
+	 * @return	mixed
+	 */
 	public function reflection_getMethods()
 	{
 		return $this->request('flickr.reflection.getMethods');
 	}
 	
+	// --------------------------------------------------------------------------
 	
-	/* Tags Methods */
-	/* http://www.flickr.com/services/api/flickr.tags.getClusterPhotos.html */
+	/**
+	 * Tags Get Cluster Photos
+	 * 
+	 * Returns the first 24 photos for a given tag cluster
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.tags.getClusterPhotos.html
+	 * @param	string	$tag
+	 * @param	string	$cluster_id
+	 * @return	mixed
+	 */
 	public function tags_getClusterPhotos($tag, $cluster_id)
 	{
 		return $this->request('flickr.tags.getClusterPhotos', array('tag' => $tag, 'cluster_id' => $cluster_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.tags.getClusters.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Tags Get Clusters
+	 * 
+	 * Gives you a list of tag clusters for the given tag.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.tags.getClusters.html
+	 * @param	string	$tag
+	 * @return	mixed
+	 */
 	public function tags_getClusters($tag)
 	{
 		return $this->request('flickr.tags.getClusters', array('tag' => $tag));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.tags.getHotList.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Tags Get Hot List
+	 * 
+	 * Returns a list of hot tags for the given period.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.tags.getHotList.html
+	 * @param	string	$period
+	 * @param	int		$count
+	 * @return	mixed
+	 */
 	public function tags_getHotList($period = NULL, $count = NULL)
 	{
 		return $this->request('flickr.tags.getHotList', array('period' => $period, 'count' => $count));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.tags.getListPhoto.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Tags Get List Photo
+	 * 
+	 * Get the tag list for a given photo.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.tags.getListPhoto.html
+	 * @param	int		$photo_id
+	 * @return	mixed
+	 */
 	public function tags_getListPhoto($photo_id)
 	{
 		return $this->request('flickr.tags.getListPhoto', array('photo_id' => $photo_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.tags.getListUser.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Tags Get List User
+	 * 
+	 * Get the tag list for a given user (or the currently logged in user).
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.tags.getListUser.html
+	 * @param	string	$user_id
+	 * @return	mixed
+	 */
 	public function tags_getListUser($user_id = NULL)
 	{
 		return $this->request('flickr.tags.getListUser', array('user_id' => $user_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.tags.getListUserPopular.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Tags Get List User Popular
+	 * 
+	 * Get the popular tags for a given user (or the currently logged in user).
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.tags.getListUserPopular.html
+	 * @param	string	$user_id
+	 * @param	int		$count
+	 * @return	mixed
+	 */
 	public function tags_getListUserPopular($user_id = NULL, $count = NULL)
 	{
 		return $this->request('flickr.tags.getListUserPopular', array('user_id' => $user_id, 'count' => $count));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.tags.getListUserRaw.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Tags Get List User Raw
+	 * 
+	 * Get the raw versions of a given tag (or all tags) for the currently 
+	 * logged-in user.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.tags.getListUserRaw.html
+	 * @param	string	$tag
+	 * @return	mixed
+	 */
 	public function tags_getListUserRaw($tag = NULL)
 	{
 		return $this->request('flickr.tags.getListUserRaw', array('tag' => $tag));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.tags.getRelated.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Tags Get Related
+	 * 
+	 * Returns a list of tags 'related' to the given tag, based on clustered 
+	 * usage analysis.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.tags.getRelated.html
+	 * @param	string	$tag
+	 * @return	mixed
+	 */
 	public function tags_getRelated($tag)
 	{
 		return $this->request('flickr.tags.getRelated', array('tag' => $tag));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.test.echo.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Test Echo
+	 * 
+	 * A testing method which echo's all parameters back in the response.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.test.echo.html
+	 * @param	array	$args
+	 * @return	mixed
+	 */
 	public function test_echo($args = array())
 	{
 		return $this->request('flickr.test.echo', $args);
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.test.login.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Test Login
+	 * 
+	 * A testing method which checks if the caller is logged in then returns 
+	 * their username.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.test.login.html
+	 * @return	mixed
+	 */
 	public function test_login()
 	{
 		return $this->request('flickr.test.login');
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.urls.getGroup.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Urls Get Group
+	 * 
+	 * Returns the url to a group's page.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.urls.getGroup.html
+	 * @param	string	$group_id
+	 * @return	mixed
+	 */
 	public function urls_getGroup($group_id)
 	{
 		return $this->request('flickr.urls.getGroup', array('group_id' => $group_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.urls.getUserPhotos.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Urls Get User Photos
+	 * 
+	 * Returns the url to a user's photos.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.urls.getUserPhotos.html
+	 * @param	string	$user_id
+	 * @return	mixed
+	 */
 	public function urls_getUserPhotos($user_id = NULL)
 	{
 		return $this->request('flickr.urls.getUserPhotos', array('user_id' => $user_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.urls.getUserProfile.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Urls Get User Profile
+	 * 
+	 * Returns the url to a user's profile.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.urls.getUserProfile.html
+	 * @param	string	$user_id
+	 * @return	mixed
+	 */
 	public function urls_getUserProfile($user_id = NULL)
 	{
 		return $this->request('flickr.urls.getUserProfile', array('user_id' => $user_id));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.urls.lookupGroup.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Urls Lookup Group
+	 * 
+	 * Returns a group NSID, given the url to a group's page or photo pool.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.urls.lookupGroup.html
+	 * @param	string	$url
+	 * @return	mixed
+	 */
 	public function urls_lookupGroup($url)
 	{
 		return $this->request('flickr.urls.lookupGroup', array('url' => $url));
 	}
 	
-	/* http://www.flickr.com/services/api/flickr.photos.notes.edit.html */
+	// --------------------------------------------------------------------------
+	
+	/**
+	 * Urls Lookup User
+	 * 
+	 * Returns a user NSID, given the url to a user's photos or profile.
+	 * 
+	 * @access	public
+	 * @link	http://www.flickr.com/services/api/flickr.urls.lookupUser.html
+	 * @param	string	$url
+	 * @return	mixed
+	 */
 	public function urls_lookupUser($url)
 	{
 		return $this->request('flickr.urls.lookupUser', array('url' => $url));
 	}
-
-
-
 }
 
 /* End of file Flickr_API.php */

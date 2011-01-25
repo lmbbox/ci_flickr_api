@@ -444,7 +444,7 @@ class Flickr_API {
 			return FALSE;
 		}
 		
-		if (FALSE === ($params = $this->_build_params($params, $method, $response_format)))
+		if (FALSE === ($params = $this->_build_params($params, $method, $response_format, $request_format)))
 		{
 			return FALSE;
 		}
@@ -588,9 +588,10 @@ class Flickr_API {
 	 * @param	array	$params
 	 * @param	string	$method
 	 * @param	string	$response_format
+	 * @param	string	$request_format
 	 * @return	array
 	 */
-	protected function _build_params($params, $method = '', $response_format = '')
+	protected function _build_params($params, $method = '', $response_format = '', $request_format = '')
 	{
 		if ('' == $this->api_key || '' == $this->secret)
 		{
@@ -619,6 +620,11 @@ class Flickr_API {
 		if ('' != $response_format)
 		{
 			$params['format'] = $response_format;
+			
+			if (self::RESPONSE_FORMAT_JSON == $response_format)
+			{
+				$params['nojsoncallback'] = 1;
+			}
 		}
 		
 		ksort($params);
@@ -632,7 +638,7 @@ class Flickr_API {
 			}
 			else
 			{
-				$auth_sig .= $param . $value;
+				$auth_sig .= ('method' == $param && self::REQUEST_FORMAT_XMLRPC == $request_format) ? '' : $param . $value;
 			}
 		}
 		
@@ -646,13 +652,13 @@ class Flickr_API {
 	 * cURL Post
 	 * 
 	 * @access	protected
-	 * @param	string	$url	Url to call
-	 * @param	array	$params	Flickr API call
+	 * @param	string			$url	Url to call
+	 * @param	array|string	$params	Flickr API call
 	 * @return	bool
 	 */
 	protected function _curl_post($url, $params)
 	{
-		if ('' == $url || !is_array($params) || empty($params))
+		if ('' == $url || (!is_array($params) && !is_string($params)) || (is_array($params) && empty($params)) || (is_string($params) && '' == $params))
 		{
 			$this->_error(TRUE, __METHOD__ . ' - ' . $this->CI->lang->line('flickr_api_params_error'), '%2$s');
 			return FALSE;
@@ -699,21 +705,22 @@ class Flickr_API {
 			return FALSE;
 		}
 		
-		$this->CI->load->library('xmlrpc');
-		$this->CI->xmlrpc->set_debug(TRUE === $this->debug ? TRUE : FALSE);
-		$this->CI->xmlrpc->server(self::API_XMLRPC_URL);
-		$this->CI->xmlrpc->method($params['method']);
-		unset($params['method']);
-		$this->CI->xmlrpc->request(array(array($params, 'struct')));
+		$request = '<methodCall><methodName>' . $params['method'] . '</methodName><params><param><value><struct>';
 		
-		if (FALSE === $this->CI->xmlrpc->send_request())
+		foreach ($params as $name => $value)
 		{
-			$this->_error($this->CI->xmlrpc->result->errno, $this->CI->xmlrpc->display_error(), $this->CI->lang->line('flickr_api_send_request_error'));
-			return FALSE;
+			$request .= 'method' == $name ? '' : "<member><name>$name</name><value>$value</value></member>";
 		}
 		
-		$this->response = $this->CI->xmlrpc->display_response();
-		return TRUE;
+		$request .= '</struct></value></param></params></methodCall>';
+		
+		if (TRUE === $this->debug)
+		{
+			log_message('debug', __METHOD__ . ' - XMLRPC Request: ' . var_export($request, TRUE));
+			log_message('debug', __METHOD__ . ' - XMLRPC Request Params: ' . var_export($params, TRUE));
+		}
+		
+		return $this->_curl_post(self::API_XMLRPC_URL, $request);
 	}
 	
 	// --------------------------------------------------------------------
@@ -733,25 +740,22 @@ class Flickr_API {
 			return FALSE;
 		}
 		
-		$method = $params['method'];
-		unset($params['method']);
+		$request = '<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:xsi="http://www.w3.org/1999/XMLSchema-instance" xmlns:xsd="http://www.w3.org/1999/XMLSchema"><s:Body><x:FlickrRequest xmlns:x="urn:flickr">';
 		
-		$client = new SoapClient(NULL, array('location' => self::API_SOAP_URL, 'uri' => 'urn:flickr', 'trace' => TRUE, 'exceptions' => FALSE));
-		$this->response = $client->__soapCall($method, $params);
+		foreach ($params as $name => $value)
+		{
+			$request .= "<$name>$value</$name>";
+		}
+		
+		$request .= '</x:FlickrRequest></s:Body></s:Envelope>';
 		
 		if (TRUE === $this->debug)
 		{
-			log_message('debug', __METHOD__ . ' - SOAP Request: ' . var_export($client->__getLastRequest(), TRUE));
+			log_message('debug', __METHOD__ . ' - SOAP Request: ' . var_export($request, TRUE));
 			log_message('debug', __METHOD__ . ' - SOAP Request Params: ' . var_export($params, TRUE));
 		}
 		
-		if (TRUE === is_soap_fault($this->response))
-		{
-			$this->_error($this->response->faultcode, $this->response->faultstring, $this->CI->lang->line('flickr_api_send_request_error'));
-			return FALSE;
-		}
-		
-		return TRUE;
+		return $this->_curl_post(self::API_SOAP_URL, $request);
 	}
 	
 	// --------------------------------------------------------------------
@@ -775,7 +779,6 @@ class Flickr_API {
 		switch ($format)
 		{
 			case self::RESPONSE_FORMAT_REST:
-			case self::RESPONSE_FORMAT_XMLRPC:
 				$response = simplexml_load_string($response);
 				
 				if ('fail' == $response['stat'])
@@ -786,32 +789,49 @@ class Flickr_API {
 				
 				return $response;
 				break;
-			case self::RESPONSE_FORMAT_SOAP:
-				if (TRUE === is_soap_fault($response))
+			case self::RESPONSE_FORMAT_XMLRPC:
+				$response = simplexml_load_string($response);
+				
+				if (TRUE === isset($response->fault))
 				{
-					$this->_error($response->faultcode, $response->faultstring, $this->CI->lang->line('flickr_api_returned_error'));
+					foreach ($response->fault->value->struct->member as $member)
+					{
+						if ('faultCode' == $member->name)
+						{
+							$err_code = $member->value->int;
+						}
+						elseif ('faultString' == $member->name)
+						{
+							$err_string = $member->value->string;
+						}
+					}
+					
+					$this->_error($err_code, $err_string, $this->CI->lang->line('flickr_api_returned_error'));
 					return FALSE;
 				}
 				
-				if ((is_array($response) && !empty($response)) || (FALSE === $response_parsed = @simplexml_load_string(preg_replace("/(<\/?)(\w+):([^>]*>)/", "$1$2$3", $response))))
+				return simplexml_load_string('<xml>' . $response->params->param->value->string . '</xml>');
+				break;
+			case self::RESPONSE_FORMAT_SOAP:
+				if (FALSE === $response_parsed = @simplexml_load_string(preg_replace("/(<\/?)(\w+):([^>]*>)/", "$1$2$3", $response)))
 				{
 					return $response;
 				}
 				
-				if (TRUE === is_object($response_parsed->sBody->sFault))
+				if (TRUE === isset($response_parsed->sBody->sFault))
 				{
-					$this->_error($response_parsed->sBody->sFault->faultcode, $response_parsed->sBody->sFault->faultstring, $this->CI->lang->line('flickr_api_returned_error'));
+					$this->_error(str_replace('flickr.error.', '',$response_parsed->sBody->sFault->faultcode), $response_parsed->sBody->sFault->faultstring, $this->CI->lang->line('flickr_api_returned_error'));
 					return FALSE;
 				}
 				
-				return $response_parsed->sBody->xFlickrResponse;
+				return simplexml_load_string('<xml>' . $response_parsed->sBody->xFlickrResponse . '</xml>');
 				break;
 			case self::RESPONSE_FORMAT_JSON:
-				$response = json_decode(trim($response));
+				$response = $this->_parse_array(json_decode($response, TRUE));
 				
 				if ('fail' == $response['stat'])
 				{
-					$this->_error($response->err['code'], $response->err['message'], $this->CI->lang->line('flickr_api_returned_error'));
+					$this->_error($response['code'], $response['message'], $this->CI->lang->line('flickr_api_returned_error'));
 					return FALSE;
 				}
 				

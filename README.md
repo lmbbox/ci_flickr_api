@@ -1,6 +1,6 @@
 # CodeIgniter Flickr API
 
-CodeIgniter Flickr API is a CodeIgniter library which gives access to make calls to Flickr's API.
+A CodeIgniter library which gives access to make calls to Flickr's API.
 
 ## Requirements
 

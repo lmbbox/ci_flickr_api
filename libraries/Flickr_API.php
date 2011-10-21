@@ -2,32 +2,31 @@
 /**
  * CodeIgniter Flickr API
  * 
- * A Flickr API Library for CodeIgniter based off phpFlickr (http://phpflickr.com/)
+ * CodeIgniter Flickr API is a CodeIgniter library which gives access to make calls to Flickr's API.
  * 
  * @package		CodeIgniter Flickr API
  * @author		LMB^Box (Thomas Montague)
- * @copyright	Copyright (c) 2009 - 2010, LMB^Box
+ * @copyright	Copyright (c) 2009 - 2011, LMB^Box
  * @license		GNU Lesser General Public License (http://www.gnu.org/copyleft/lgpl.html)
  * @link		http://lmbbox.com/projects/ci-flickr-api/
- * @version		Version 0.4
+ * @version		Version 0.4.0
  * @filesource
  */
 
 // ------------------------------------------------------------------------
 
 /**
- * Flickr API Class
+ * CodeIgniter Flickr API Class
  * 
  * @package		CodeIgniter Flickr API
  * @subpackage	Libraries
  * @category	Libraries
  * @author		LMB^Box (Thomas Montague)
  * @link		http://codeigniter.lmbbox.com/user_guide/libraries/flickr_api.html
- * @version		Version 0.4
  */
-class Flickr_API {
+class CI_Flickr_API {
 	
-	const VERSION						= 0.4;
+	const VERSION						= '0.4.0';
 	const API_AUTH_URL					= 'http://www.flickr.com/services/auth/';
 	const API_REST_URL					= 'http://api.flickr.com/services/rest/';
 	const API_XMLRPC_URL				= 'http://api.flickr.com/services/xmlrpc/';
@@ -84,7 +83,7 @@ class Flickr_API {
 		// Initialize Parameters
 		$this->initialize($params);
 		
-		log_message('debug', 'Flickr_API Class Initialized');
+		log_message('debug', 'CI_Flickr_API Class Initialized');
 	}
 	
 	// --------------------------------------------------------------------
@@ -3755,4 +3754,4 @@ class Flickr_API {
 }
 
 /* End of file Flickr_API.php */
-/* Location: ./system/application/libraries/Flickr_API.php */
+/* Location: ./application/libraries/Flickr_API.php */

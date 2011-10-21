@@ -1,15 +1,15 @@
 <?php  if ( ! defined('BASEPATH')) exit('No direct script access allowed');
 /**
  * CodeIgniter Flickr API
- *
- * A Flickr API Library for CodeIgniter based off phpFlickr (http://phpflickr.com/)
- *
+ * 
+ * CodeIgniter Flickr API is a CodeIgniter library which gives access to make calls to Flickr's API.
+ * 
  * @package		CodeIgniter Flickr API
  * @author		LMB^Box (Thomas Montague)
- * @copyright	Copyright (c) 2009 - 2010, LMB^Box
+ * @copyright	Copyright (c) 2009 - 2011, LMB^Box
  * @license		GNU Lesser General Public License (http://www.gnu.org/copyleft/lgpl.html)
  * @link		http://lmbbox.com/projects/ci-flickr-api/
- * @version		Version 0.4
+ * @version		Version 0.4.0
  * @filesource
  */
 
@@ -30,4 +30,4 @@ $lang['flickr_api_'] = '';
 
 
 /* End of file flickr_api_lang.php */
-/* Location: ./system/application/language/french/flickr_api_lang.php */
+/* Location: ./application/language/french/flickr_api_lang.php */

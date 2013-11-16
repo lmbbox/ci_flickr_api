@@ -1,6 +1,6 @@
 <?php  if ( ! defined('BASEPATH')) exit('No direct script access allowed');
 
-$autoload['libraries'] = array('flickr_api');
+$autoload['libraries'] = array('Flickr_API');
 $autoload['helper'] = array();
 $autoload['config'] = array();
 $autoload['language'] = array();
